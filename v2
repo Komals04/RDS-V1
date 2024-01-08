@@ -1,0 +1,48 @@
+import boto3
+import csv
+from datetime import datetime
+
+def get_rds_info():
+    # Initialize the RDS client
+    rds_client = boto3.client('rds')
+
+    # Get a list of RDS instances
+    response = rds_client.describe_db_instances()
+
+    # Create a CSV file to store the information
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    filename = f'rds_instance_details_{timestamp}.csv'
+
+    fieldnames = [
+        'DBInstanceIdentifier', 'DBInstanceClass', 'AllocatedStorage', 'Engine',
+        'MultiAZ', 'Iops', 'StorageType', 'EngineVersion', 'AutoScaling', 'MinStorageSize', 'MaxStorageSize',
+        'SecurityGroups'
+    ]
+
+    with open(filename, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        # Loop through each RDS instance
+        for instance in response['DBInstances']:
+            instance_info = {
+                'DBInstanceIdentifier': instance['DBInstanceIdentifier'],
+                'DBInstanceClass': instance['DBInstanceClass'],
+                'AllocatedStorage': instance['AllocatedStorage'],
+                'Engine': instance['Engine'],
+                'MultiAZ': instance['MultiAZ'],
+                'Iops': instance.get('Iops', 'Not provisioned IOPS'),
+                'StorageType': instance['StorageType'],
+                'EngineVersion': instance['EngineVersion'],
+                'AutoScaling': instance.get('ScalingConfiguration', {}).get('AutoPause', 'Not Enabled'),
+                'MinStorageSize': instance.get('ScalingConfiguration', {}).get('MinStorageSize', 'N/A'),
+                'MaxStorageSize': instance.get('ScalingConfiguration', {}).get('MaxStorageSize', 'N/A'),
+                'SecurityGroups': ', '.join([group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])]),
+            }
+
+            writer.writerow(instance_info)
+
+    print(f'RDS instance details exported to {filename}')
+
+if __name__ == "__main__":
+    get_rds_info()
