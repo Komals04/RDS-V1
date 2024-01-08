@@ -1,0 +1,84 @@
+import boto3
+import json
+from botocore.exceptions import NoCredentialsError
+
+def get_account_info():
+    # Initialize an STS client to assume the role
+    sts_client = boto3.client('sts')
+
+    # Replace 'ROLE_ARN' with the ARN of a role that has permissions to describe RDS instances
+    assumed_role = sts_client.assume_role(
+        RoleArn='arn:aws:iam::ACCOUNT_NUMBER:role/ROLE_NAME',
+        RoleSessionName='AssumeRoleSession'
+    )
+
+    # Extract temporary credentials from the assumed role
+    aws_access_key_id = assumed_role['Credentials']['AccessKeyId']
+    aws_secret_access_key = assumed_role['Credentials']['SecretAccessKey']
+    aws_session_token = assumed_role['Credentials']['SessionToken']
+
+    return aws_access_key_id, aws_secret_access_key, aws_session_token
+
+def get_rds_metrics():
+    # Get temporary credentials by assuming a role
+    aws_access_key_id, aws_secret_access_key, aws_session_token = get_account_info()
+
+    # Initialize the RDS client with temporary credentials
+    rds_client = boto3.client('rds', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, aws_session_token=aws_session_token)
+
+    # Get the AWS account ID
+    sts_client = boto3.client('sts', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, aws_session_token=aws_session_token)
+    account_id = sts_client.get_caller_identity()['Account']
+
+    # Get the AWS account alias (if available)
+    account_alias = sts_client.list_account_aliases()['AccountAliases'][0] if 'AccountAliases' in sts_client.list_account_aliases() else None
+
+    # Get a list of RDS instances
+    response = rds_client.describe_db_instances()
+
+    # Loop through each RDS instance
+    for instance in response['DBInstances']:
+        print(f"Account Name: {account_alias if account_alias else 'N/A'}")
+        print(f"Account Number: {account_id}")
+        print(f"RDS Instance Identifier: {instance['DBInstanceIdentifier']}")
+        print(f"Instance Type: {instance['DBInstanceClass']}")
+        print(f"CPU: {instance['DBInstanceClass']} vCPUs")
+        print(f"Memory: {instance['DBInstanceClass']} GB")
+        print(f"I/O Requirements: {instance['Iops'] if 'Iops' in instance else 'Not provisioned IOPS'}")
+        print(f"Storage Type: {instance['StorageType']}")
+        print(f"Allocated Storage: {instance['AllocatedStorage']} GB")
+        print(f"Multi-AZ Deployment: {instance['MultiAZ']}")
+        print(f"Database Engine Version: {instance['Engine']}-{instance['EngineVersion']}")
+
+        # Check if Aurora Capacity Units (ACUs) are available
+        if instance['Engine'] == 'aurora':
+            print(f"Aurora Capacity Units (ACUs): {instance['Capacity']}")
+
+        # Check for read replicas
+        read_replicas = rds_client.describe_db_instances(Filters=[{'Name': 'ReadReplicaSourceDBInstanceIdentifier', 'Values': [instance['DBInstanceIdentifier']]}])
+        if read_replicas['DBInstances']:
+            print("Read Replicas:")
+            for replica in read_replicas['DBInstances']:
+                print(f"  - Replica Identifier: {replica['DBInstanceIdentifier']}")
+                print(f"    - Instance Type: {replica['DBInstanceClass']}")
+                print(f"    - CPU: {replica['DBInstanceClass']} vCPUs")
+                print(f"    - Memory: {replica['DBInstanceClass']} GB")
+                print(f"    - Storage Type: {replica['StorageType']}")
+                print(f"    - Allocated Storage: {replica['AllocatedStorage']} GB")
+
+        # Get security group information
+        security_groups = instance.get('VpcSecurityGroups', [])
+        print("Security Groups:")
+        for group in security_groups:
+            print(f"  - {group['VpcSecurityGroupId']} ({group['Status']})")
+
+        # Check if auto-scaling is enabled
+        if 'StorageType' in instance and instance['StorageType'] == 'io1' and 'Enable' in instance.get('StorageEncrypted', ''):
+            print(f"Auto Scaling Enabled: {instance['ScalingConfiguration']['AutoPause']}")
+            print(f"Min Allocated Storage: {instance['ScalingConfiguration']['MinStorageSize']} GB")
+            print(f"Max Allocated Storage: {instance['ScalingConfiguration']['MaxStorageSize']} GB")
+
+        print("\n")
+
+# Run the function to fetch and print RDS metrics
+get_rds_metrics()
