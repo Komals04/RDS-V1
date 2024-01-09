@@ -13,35 +13,38 @@ def get_rds_instances():
         print(f"Error retrieving RDS instances: {e}")
         return []
 
+def get_rds_databases(instance_id):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=instance_id)
+        databases = response['DBInstances'][0].get('DBInstances', [])
+        return databases
+    except ClientError as e:
+        print(f"Error retrieving databases for RDS instance {instance_id}: {e}")
+        return []
+
 def process_rds_instance(instance):
     instance_id = instance['DBInstanceIdentifier']
     endpoint = instance.get('Endpoint', {}).get('Address', 'Not Configured')
 
-    instance_details = {
-        'DBInstanceIdentifier': instance_id,
-        'DBInstanceClass': instance.get('DBInstanceClass', 'Not Configured'),
-        'Engine': instance.get('Engine', 'Not Configured'),
-        'EngineVersion': instance.get('EngineVersion', 'Not Configured'),
-        'StorageType': instance.get('StorageType', 'Not Configured'),
-        'AllocatedStorage': str(instance.get('AllocatedStorage', 'Not Configured')),
-        'Endpoint': endpoint,
-        'Status': instance.get('DBInstanceStatus', 'Not Configured'),
-        'CreationTime': str(instance.get('InstanceCreateTime', 'Not Configured')),
-    }
-
     try:
-        response = rds_client.describe_db_instance_attributes(DBInstanceIdentifier=instance_id)
-        instance_details['IAMDatabaseAuthenticationEnabled'] = str(
-            response.get('DBInstanceIdentifier', {}).get('IAMDatabaseAuthenticationEnabled', 'Not Configured')
-        )
+        databases = get_rds_databases(instance_id)
     except ClientError as e:
-        print(f"Error retrieving RDS instance attributes for {instance_id}: {e}")
-        instance_details['IAMDatabaseAuthenticationEnabled'] = 'Not Configured'
+        print(f"Error retrieving databases for RDS instance {instance_id}: {e}")
+        return
 
-    with csv_lock:
-        writer.writerow(instance_details)
+    for database in databases:
+        database_details = {
+            'DBInstanceIdentifier': instance_id,
+            'DatabaseName': database.get('DBName', 'Not Configured'),
+            'Engine': database.get('Engine', 'Not Configured'),
+            'EngineVersion': database.get('EngineVersion', 'Not Configured'),
+            'Status': database.get('DBInstanceStatus', 'Not Configured'),
+        }
 
-    print(f"Exported details for RDS instance: {instance_id}")
+        with csv_lock:
+            writer.writerow(database_details)
+
+        print(f"Exported details for RDS database: {database_details['DatabaseName']} in instance {instance_id}")
 
 def main():
     start_time = datetime.now()
@@ -55,12 +58,10 @@ def main():
         instances = get_rds_instances()
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename = f'rds_instance_details_{timestamp}.csv'
+        filename = f'rds_database_details_{timestamp}.csv'
 
         fieldnames = [
-            'DBInstanceIdentifier', 'DBInstanceClass', 'Engine', 'EngineVersion',
-            'StorageType', 'AllocatedStorage', 'Endpoint', 'Status', 'CreationTime',
-            'IAMDatabaseAuthenticationEnabled'
+            'DBInstanceIdentifier', 'DatabaseName', 'Engine', 'EngineVersion', 'Status'
         ]
 
         with open(filename, 'w', newline='') as csvfile:
@@ -75,7 +76,7 @@ def main():
         end_time = datetime.now()
         total_execution_time = end_time - start_time
         print(f'Total execution time: {total_execution_time}')
-        print(f'Completed checking and exporting RDS instance details to {filename}.')
+        print(f'Completed checking and exporting RDS database details to {filename}.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
