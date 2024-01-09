@@ -1,23 +1,14 @@
 import csv
 import boto3
 from botocore.exceptions import ClientError
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.ssl_ import create_urllib3_context
+from botocore.vendored import requests
 
 def get_rds_insights():
     # Specify your AWS region
     aws_region = 'us-east-2'
 
-    # Create an RDS client with SSL verification settings
-    rds_client = boto3.client(
-        'rds',
-        region_name=aws_region,
-        config=boto3.session.Config(
-            region_name=aws_region,
-            connect_timeout=5,  # Adjust timeout as needed
-            retries={'max_attempts': 2},  # Adjust max retries as needed
-        )
-    )
+    # Create an RDS client
+    rds_client = boto3.client('rds', region_name=aws_region)
 
     # Initialize an empty list to store RDS insights
     rds_insights = []
