@@ -49,3 +49,105 @@ def get_rds_info():
 
 if __name__ == "__main__":
     get_rds_info()
+
+
+
+
+
+
+Traceback (most recent call last):
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 714, in urlopen
+    httplib_response = self._make_request(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 403, in _make_request
+    self._validate_conn(conn)
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 1053, in _validate_conn
+    conn.connect()
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connection.py", line 419, in connect
+    self.sock = ssl_wrap_socket(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\util\ssl_.py", line 449, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\util\ssl_.py", line 493, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+  File "C:\Program Files\Python310\lib\ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "C:\Program Files\Python310\lib\ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "C:\Program Files\Python310\lib\ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Program Files\Python310\lib\site-packages\botocore\httpsession.py", line 464, in send
+    urllib_response = conn.urlopen(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 798, in urlopen
+    retries = retries.increment(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\util\retry.py", line 525, in increment
+    raise six.reraise(type(error), error, _stacktrace)
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\packages\six.py", line 769, in reraise
+    raise value.with_traceback(tb)
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 714, in urlopen
+    httplib_response = self._make_request(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 403, in _make_request
+    self._validate_conn(conn)
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connectionpool.py", line 1053, in _validate_conn
+    conn.connect()
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\connection.py", line 419, in connect
+    self.sock = ssl_wrap_socket(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\util\ssl_.py", line 449, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(
+  File "C:\Program Files\Python310\lib\site-packages\urllib3\util\ssl_.py", line 493, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+  File "C:\Program Files\Python310\lib\ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "C:\Program Files\Python310\lib\ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "C:\Program Files\Python310\lib\ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ux186612\Documents\rds-1.py", line 51, in <module>
+    get_rds_info()
+  File "C:\Users\ux186612\Documents\rds-1.py", line 13, in get_rds_info
+    response = rds_client.describe_db_instances()
+  File "C:\Program Files\Python310\lib\site-packages\botocore\client.py", line 553, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\client.py", line 989, in _make_api_call
+    http, parsed_response = self._make_request(
+  File "C:\Program Files\Python310\lib\site-packages\botocore\client.py", line 1015, in _make_request
+    return self._endpoint.make_request(operation_model, request_dict)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\endpoint.py", line 119, in make_request
+    return self._send_request(request_dict, operation_model)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\endpoint.py", line 202, in _send_request
+    while self._needs_retry(
+  File "C:\Program Files\Python310\lib\site-packages\botocore\endpoint.py", line 354, in _needs_retry
+    responses = self._event_emitter.emit(
+  File "C:\Program Files\Python310\lib\site-packages\botocore\hooks.py", line 412, in emit
+    return self._emitter.emit(aliased_event_name, **kwargs)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\hooks.py", line 256, in emit
+    return self._emit(event_name, kwargs)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\hooks.py", line 239, in _emit
+    response = handler(**kwargs)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\retryhandler.py", line 207, in __call__
+    if self._checker(**checker_kwargs):
+  File "C:\Program Files\Python310\lib\site-packages\botocore\retryhandler.py", line 284, in __call__
+    should_retry = self._should_retry(
+  File "C:\Program Files\Python310\lib\site-packages\botocore\retryhandler.py", line 320, in _should_retry
+    return self._checker(attempt_number, response, caught_exception)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\retryhandler.py", line 363, in __call__
+    checker_response = checker(
+  File "C:\Program Files\Python310\lib\site-packages\botocore\retryhandler.py", line 247, in __call__
+    return self._check_caught_exception(
+  File "C:\Program Files\Python310\lib\site-packages\botocore\retryhandler.py", line 416, in _check_caught_exception
+    raise caught_exception
+  File "C:\Program Files\Python310\lib\site-packages\botocore\endpoint.py", line 281, in _do_get_response
+    http_response = self._send(request)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\endpoint.py", line 377, in _send
+    return self.http_session.send(request)
+  File "C:\Program Files\Python310\lib\site-packages\botocore\httpsession.py", line 491, in send
+    raise SSLError(endpoint_url=request.url, error=e)
+botocore.exceptions.SSLError: SSL validation failed for https://rds.us-east-2.amazonaws.com/ [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)
