@@ -1,0 +1,53 @@
+import json
+import logging
+import boto3
+from botocore.exceptions import ClientError
+
+logger = logging.getLogger(__name__)
+
+class InstanceWrapper:
+    # ... (rest of the existing code)
+
+    def get_rds_info(self):
+        """
+        Gets information about RDS instances.
+
+        :return: A list of dictionaries, where each dictionary represents an RDS instance.
+        """
+        try:
+            response = self.rds_client.describe_db_instances()
+            instances = response["DBInstances"]
+            rds_info_list = []
+
+            for instance in instances:
+                rds_info = {
+                    "DBInstanceIdentifier": instance.get("DBInstanceIdentifier", ""),
+                    "DBInstanceClass": instance.get("DBInstanceClass", ""),
+                    "AllocatedStorage": instance.get("AllocatedStorage", ""),
+                    "Engine": instance.get("Engine", ""),
+                    "MultiAZ": instance.get("MultiAZ", ""),
+                    "Iops": instance.get("Iops", ""),
+                    "StorageType": instance.get("StorageType", ""),
+                    "EngineVersion": instance.get("EngineVersion", ""),
+                    "AutoScaling": instance.get("AutoMinorVersionUpgrade", ""),
+                    "MinStorageSize": instance.get("MinimumStorageSize", ""),
+                    "MaxStorageSize": instance.get("MaximumStorageSize", ""),
+                    "SecurityGroups": [group["VpcSecurityGroupId"] for group in instance.get("VpcSecurityGroups", [])],
+                }
+
+                rds_info_list.append(rds_info)
+
+        except ClientError as err:
+            logger.error(
+                "Couldn't get RDS instances. Here's why: %s: %s",
+                err.response["Error"]["Code"],
+                err.response["Error"]["Message"],
+            )
+            raise
+        else:
+            return rds_info_list
+
+# Usage example:
+# rds_instance_wrapper = InstanceWrapper.from_client()
+# rds_info = rds_instance_wrapper.get_rds_info()
+# print(json.dumps(rds_info, indent=2))
