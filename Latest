@@ -47,7 +47,9 @@ def main():
     start_time = datetime.now()
 
     global rds_client
-    rds_client = boto3.client('rds')
+    # Specify your AWS region here
+    region = 'us-east-2'
+    rds_client = boto3.client('rds', region_name=region)
 
     instances = get_rds_instances()
 
