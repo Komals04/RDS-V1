@@ -54,3 +54,12 @@ def get_rds_info():
 
 if __name__ == "__main__":
     get_rds_info()
+
+
+
+
+
+https://github.com/awsdocs/aws-doc-sdk-examples/blob/main/python/example_code/rds/instance_wrapper.py#L304
+
+
+
