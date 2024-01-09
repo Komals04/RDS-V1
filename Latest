@@ -51,30 +51,33 @@ def main():
     region = 'us-east-2'
     rds_client = boto3.client('rds', region_name=region)
 
-    instances = get_rds_instances()
+    try:
+        instances = get_rds_instances()
 
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f'rds_instance_details_{timestamp}.csv'
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        filename = f'rds_instance_details_{timestamp}.csv'
 
-    fieldnames = [
-        'DBInstanceIdentifier', 'DBInstanceClass', 'Engine', 'EngineVersion',
-        'StorageType', 'AllocatedStorage', 'Endpoint', 'Status', 'CreationTime',
-        'IAMDatabaseAuthenticationEnabled'
-    ]
+        fieldnames = [
+            'DBInstanceIdentifier', 'DBInstanceClass', 'Engine', 'EngineVersion',
+            'StorageType', 'AllocatedStorage', 'Endpoint', 'Status', 'CreationTime',
+            'IAMDatabaseAuthenticationEnabled'
+        ]
 
-    with open(filename, 'w', newline='') as csvfile:
-        global writer, csv_lock
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        csv_lock = threading.Lock()
-        writer.writeheader()
+        with open(filename, 'w', newline='') as csvfile:
+            global writer, csv_lock
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            csv_lock = threading.Lock()
+            writer.writeheader()
 
-        with ThreadPoolExecutor() as executor:
-            executor.map(process_rds_instance, instances)
+            with ThreadPoolExecutor() as executor:
+                executor.map(process_rds_instance, instances)
 
-    end_time = datetime.now()
-    total_execution_time = end_time - start_time
-    print(f'Total execution time: {total_execution_time}')
-    print(f'Completed checking and exporting RDS instance details to {filename}.')
+        end_time = datetime.now()
+        total_execution_time = end_time - start_time
+        print(f'Total execution time: {total_execution_time}')
+        print(f'Completed checking and exporting RDS instance details to {filename}.')
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
