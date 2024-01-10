@@ -2,43 +2,27 @@ import boto3
 import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
-from concurrent.futures import ThreadPoolExecutor
-import threading
 
-rds_client = boto3.client('rds', region_name=region, proxies={'http': 'http://proxy_address:proxy_port', 'https': 'http://proxy_address:proxy_port'})
-
-
-def extract_db_details(db_instance):
-    db_identifier = db_instance.get('DBInstanceIdentifier', 'Not Configured')
-    
-    db_details = {
-        'DBIdentifier': db_identifier,
-        'Status': db_instance.get('DBInstanceStatus', 'Not Configured'),
-        'Role': db_instance.get('IAMDatabaseAuthenticationEnabled', 'Not Configured'),
-        'Engine': db_instance.get('Engine', 'Not Configured'),
-        'Size': str(db_instance.get('AllocatedStorage', 'Not Configured')),
-        'CPU': str(db_instance.get('DbInstanceClass', 'Not Configured')),
-    }
-
-    return db_details
-
-def get_rds_instances():
+def get_rds_insights(rds_client, db_instance):
     try:
-        response = rds_client.describe_db_instances()
-        return response['DBInstances']
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+        
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': instance['IAMDatabaseAuthenticationEnabled'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance['AllocatedStorage'],
+        }
+        
+        return insights
     except ClientError as e:
-        print(f"Error retrieving RDS instances: {e}")
-        return []
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
 
-def process_rds_instance(instance):
-    db_details = extract_db_details(instance)
-
-    with csv_lock:
-        writer.writerow(db_details)
-
-    print(f"Exported details for RDS instance: {db_details['DBIdentifier']}")
-
-# The rest of your code remains unchanged
 def main():
     try:
         # Replace 'your-region' with your AWS region
