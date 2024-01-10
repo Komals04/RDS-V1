@@ -1,0 +1,87 @@
+import boto3
+import csv
+from datetime import datetime
+from botocore.exceptions import ClientError
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
+def get_rds_instances():
+    try:
+        response = rds_client.describe_db_instances()
+        return response['DBInstances']
+    except ClientError as e:
+        print(f"Error retrieving RDS instances: {e}")
+        return []
+
+def process_rds_instance(instance):
+    instance_id = instance['DBInstanceIdentifier']
+    endpoint = instance.get('Endpoint', {}).get('Address', 'Not Configured')
+
+    instance_details = {
+        'DBInstanceIdentifier': instance_id,
+        'DBInstanceClass': instance.get('DBInstanceClass', 'Not Configured'),
+        'Engine': instance.get('Engine', 'Not Configured'),
+        'EngineVersion': instance.get('EngineVersion', 'Not Configured'),
+        'StorageType': instance.get('StorageType', 'Not Configured'),
+        'AllocatedStorage': str(instance.get('AllocatedStorage', 'Not Configured')),
+        'Endpoint': endpoint,
+        'Status': instance.get('DBInstanceStatus', 'Not Configured'),
+        'CreationTime': str(instance.get('InstanceCreateTime', 'Not Configured')),
+        'MultiAZ': str(instance.get('MultiAZ', 'Not Configured')),
+        'StorageType': instance.get('StorageType', 'Not Configured'),
+        'Storage': str(instance.get('AllocatedStorage', 'Not Configured')) + ' GB',
+        'ProvisionedIOPS': str(instance.get('Iops', 'Not Applicable'))
+    }
+
+    try:
+        response = rds_client.describe_db_instance_attributes(DBInstanceIdentifier=instance_id)
+        instance_details['IAMDatabaseAuthenticationEnabled'] = str(
+            response.get('DBInstanceIdentifier', {}).get('IAMDatabaseAuthenticationEnabled', 'Not Configured')
+        )
+    except ClientError as e:
+        print(f"Error retrieving RDS instance attributes for {instance_id}: {e}")
+        instance_details['IAMDatabaseAuthenticationEnabled'] = 'Not Configured'
+
+    with csv_lock:
+        writer.writerow(instance_details)
+
+    print(f"Exported details for RDS instance: {instance_id}")
+
+def main():
+    start_time = datetime.now()
+
+    global rds_client
+    # Specify your AWS region here
+    region = 'us-east-2'
+    rds_client = boto3.client('rds', region_name=region)
+
+    try:
+        instances = get_rds_instances()
+
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        filename = f'rds_instance_details_{timestamp}.csv'
+
+        fieldnames = [
+            'DBInstanceIdentifier', 'DBInstanceClass', 'Engine', 'EngineVersion',
+            'StorageType', 'AllocatedStorage', 'Endpoint', 'Status', 'CreationTime',
+            'IAMDatabaseAuthenticationEnabled', 'MultiAZ', 'StorageType', 'Storage', 'ProvisionedIOPS'
+        ]
+
+        with open(filename, 'w', newline='') as csvfile:
+            global writer, csv_lock
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            csv_lock = threading.Lock()
+            writer.writeheader()
+
+            with ThreadPoolExecutor() as executor:
+                executor.map(process_rds_instance, instances)
+
+        end_time = datetime.now()
+        total_execution_time = end_time - start_time
+        print(f'Total execution time: {total_execution_time}')
+        print(f'Completed checking and exporting RDS instance details to {filename}.')
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
