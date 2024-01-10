@@ -7,6 +7,8 @@ def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
         
         insights = {
             'DBIdentifier': instance['DBInstanceIdentifier'],
@@ -21,6 +23,7 @@ def get_rds_insights(rds_client, db_instance):
             'StorageType': instance.get('StorageType', 'Not Configured'),
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
             'VPC': instance.get('DBSubnetGroups', [{}])[0].get('VpcId', 'Not Configured'),
+            'GlobalCluster': global_cluster_identifier,
         }
         
         return insights
@@ -30,31 +33,32 @@ def get_rds_insights(rds_client, db_instance):
 
 def main():
     try:
-        # Replace 'your-region' with your AWS region
-        region = 'us-east-2'
-        rds_client = boto3.client('rds', region_name=region)
-        
-        instances = rds_client.describe_db_instances()['DBInstances']
+        # Replace 'your-region' with your AWS regions
+        regions = ['us-east-1', 'us-east-2']
+        for region in regions:
+            rds_client = boto3.client('rds', region_name=region)
+            
+            instances = rds_client.describe_db_instances()['DBInstances']
 
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename = f'rds_insights_{timestamp}.csv'
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            filename = f'rds_insights_{region}_{timestamp}.csv'
 
-        fieldnames = [
-            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-            'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC',
-        ]
+            fieldnames = [
+                'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
+                'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
+            ]
 
-        with open(filename, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+            with open(filename, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
 
-            for instance in instances:
-                insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
-                if insights:
-                    writer.writerow(insights)
-                    print(f"Exported details for RDS instance: {insights['DBIdentifier']}")
+                for instance in instances:
+                    insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
+                    if insights:
+                        writer.writerow(insights)
+                        print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
-        print(f'Completed checking and exporting RDS insights to {filename}.')
+            print(f'Completed checking and exporting RDS insights to {filename} in region {region}.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
