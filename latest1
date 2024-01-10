@@ -5,6 +5,9 @@ from botocore.exceptions import ClientError
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
+rds_client = boto3.client('rds', region_name=region, proxies={'http': 'http://proxy_address:proxy_port', 'https': 'http://proxy_address:proxy_port'})
+
+
 def extract_db_details(db_instance):
     db_identifier = db_instance.get('DBInstanceIdentifier', 'Not Configured')
     
