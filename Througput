@@ -19,7 +19,8 @@ def get_rds_insights(rds_client, db_instance):
             'Storage': instance.get('AllocatedStorage', 'Not Configured'),
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
-            'MultiAZ': instance.get('MultiAZ', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'VPC': instance.get('DBSubnetGroups', [{}])[0].get('VpcId', 'Not Configured'),
         }
         
         return insights
@@ -40,7 +41,7 @@ def main():
 
         fieldnames = [
             'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-            'Storage', 'ProvisionedIOPS', 'StorageType', 'MultiAZ',
+            'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC',
         ]
 
         with open(filename, 'w', newline='') as csvfile:
