@@ -2,85 +2,52 @@ import boto3
 import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
-from concurrent.futures import ThreadPoolExecutor
-import threading
 
-def get_rds_databases(rds_client, instance_id):
+def get_rds_insights(rds_client, db_instance):
     try:
-        response = rds_client.describe_db_instances(DBInstanceIdentifier=instance_id)
-        databases = response['DBInstances'][0].get('DBName', [])
-        return databases
-    except ClientError as e:
-        print(f"Error retrieving databases for RDS instance {instance_id}: {e}")
-        return []
-
-def get_rds_insights(rds_client, instance_id):
-    try:
-        response = rds_client.describe_db_instance_performance_insights(DBInstanceIdentifier=instance_id)
-        insights = response.get('PerformanceInsightsEnabled', False)
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+        
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': instance['IAMDatabaseAuthenticationEnabled'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance['AllocatedStorage'],
+        }
+        
         return insights
     except ClientError as e:
-        print(f"Error retrieving Performance Insights for RDS instance {instance_id}: {e}")
-        return False
-
-def process_rds_instance(rds_client, instance):
-    instance_id = instance['DBInstanceIdentifier']
-    endpoint = instance.get('Endpoint', {}).get('Address', 'Not Configured')
-
-    try:
-        database_names = get_rds_databases(rds_client, instance_id)
-    except ClientError as e:
-        print(f"Error retrieving databases for RDS instance {instance_id}: {e}")
-        return
-
-    for database_name in database_names:
-        insights_enabled = get_rds_insights(rds_client, instance_id)
-
-        database_details = {
-            'DBInstanceIdentifier': instance_id,
-            'DatabaseName': database_name,
-            'Engine': instance.get('Engine', 'Not Configured'),
-            'EngineVersion': instance.get('EngineVersion', 'Not Configured'),
-            'Status': instance.get('DBInstanceStatus', 'Not Configured'),
-            'PerformanceInsightsEnabled': insights_enabled,
-        }
-
-        with csv_lock:
-            writer.writerow(database_details)
-
-        print(f"Exported details for RDS database: {database_details['DatabaseName']} in instance {instance_id}")
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
 
 def main():
-    start_time = datetime.now()
-
-    global rds_client
-    # Specify your AWS region here
-    region = 'us-east-2'
-    rds_client = boto3.client('rds', region_name=region)
-
     try:
+        # Replace 'your-region' with your AWS region
+        region = 'your-region'
+        rds_client = boto3.client('rds', region_name=region)
+        
         instances = rds_client.describe_db_instances()['DBInstances']
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         filename = f'rds_insights_{timestamp}.csv'
 
         fieldnames = [
-            'DBInstanceIdentifier', 'DatabaseName', 'Engine', 'EngineVersion',
-            'Status', 'PerformanceInsightsEnabled',
+            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
         ]
 
         with open(filename, 'w', newline='') as csvfile:
-            global writer, csv_lock
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            csv_lock = threading.Lock()
             writer.writeheader()
 
-            with ThreadPoolExecutor() as executor:
-                executor.map(process_rds_instance, [rds_client] * len(instances), instances)
+            for instance in instances:
+                insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
+                if insights:
+                    writer.writerow(insights)
+                    print(f"Exported details for RDS instance: {insights['DBIdentifier']}")
 
-        end_time = datetime.now()
-        total_execution_time = end_time - start_time
-        print(f'Total execution time: {total_execution_time}')
         print(f'Completed checking and exporting RDS insights to {filename}.')
     except Exception as e:
         print(f"An error occurred: {e}")
