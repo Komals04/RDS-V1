@@ -32,14 +32,10 @@ def get_role_information(rds_client, db_instance):
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
-        print(f"Debug: Instance details for {db_instance}: {instance}")
-
         global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
         db_cluster_role = instance.get('DBClusterRole', None)
 
         if global_cluster_identifier:
-            print(f"Debug: DBClusterRole for {db_instance}: {db_cluster_role}")
-
             if db_cluster_role == 'WRITER':
                 return 'Writer Instance'
             elif db_cluster_role == 'READER':
@@ -51,9 +47,6 @@ def get_role_information(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
-
-
-
 
 def get_rds_insights(rds_client, db_instance):
     try:
@@ -104,6 +97,8 @@ def main():
                 'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
                 'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
                 'InstanceType', 'MaximumCapacity', 'MinimumCapacity',
+                'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId', 'PerformanceInsightsRetentionPeriod',
+                'ServerlessV2ScalingConfiguration',
             ]
 
             with open(filename, 'w', newline='') as csvfile:
