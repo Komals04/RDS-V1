@@ -5,33 +5,20 @@ from botocore.exceptions import ClientError
 
 def get_instance_configuration(rds_client, db_instance):
     try:
-        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
-        instance = response['DBInstances'][0]
-
-        instance_configuration = {
-            'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
-            'MaximumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
-            'MinimumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
-        }
-
-        # Check if the instance is provisioned with IOPS
-        if 'Provisioned IOPS' in instance_configuration['InstanceType']:
-            instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
-
-        return instance_configuration
-    except ClientError as e:
-        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
-        return None
-
-
-def get_instance_configuration(rds_client, db_instance):
-    try:
         response = rds_client.describe_db_instance_automated_backups(DBInstanceIdentifier=db_instance)
         automated_backup = response['DBInstanceAutomatedBackups'][0]
-
         configuration = automated_backup.get('InstanceConfigurations', [{}])[0]
 
-    def get_rds_insights(rds_client, db_instance):
+        return {
+            'InstanceType': configuration.get('InstanceClass', 'Not Configured'),
+            'MaximumCapacity': str(configuration.get('MaxAllocatedStorage', 'Not Configured')),
+            'MinimumCapacity': str(configuration.get('MinAllocatedStorage', 'Not Configured')),
+        }
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return {}
+
+def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
@@ -41,7 +28,7 @@ def get_instance_configuration(rds_client, db_instance):
         insights = {
             'DBIdentifier': instance['DBInstanceIdentifier'],
             'Status': instance['DBInstanceStatus'],
-            'Role': instance['IAMDatabaseAuthenticationEnabled'],
+            'Role': instance.get('IAMDatabaseAuthenticationEnabled', 'Not Configured'),
             'Engine': instance['Engine'],
             'Region': rds_client.meta.region_name,
             'Size': instance['DBInstanceClass'],
@@ -55,8 +42,7 @@ def get_instance_configuration(rds_client, db_instance):
         }
 
         instance_configuration = get_instance_configuration(rds_client, db_instance)
-        if instance_configuration:
-            insights.update(instance_configuration)
+        insights.update(instance_configuration)
 
         return insights
     except ClientError as e:
