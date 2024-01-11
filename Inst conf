@@ -12,8 +12,8 @@ def get_instance_configuration(rds_client, db_instance):
 
         instance_configuration = {
             'InstanceType': configuration.get('InstanceClass', 'Not Configured'),
-            'MaximumCapacity': configuration.get('MaxAllocatedStorage', 'Not Configured'),
-            'MinimumCapacity': configuration.get('MinAllocatedStorage', 'Not Configured'),
+            'MaximumCapacity': str(configuration.get('MaxAllocatedStorage', 'Not Configured')),
+            'MinimumCapacity': str(configuration.get('MinAllocatedStorage', 'Not Configured')),
         }
 
         return instance_configuration
