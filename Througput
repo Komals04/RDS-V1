@@ -28,9 +28,10 @@ def get_role_information(rds_client, db_instance):
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
-        # Print the actual role_field value for debugging
+        # Print the entire instance dictionary for debugging
+        print(f"Debug: Instance details for {db_instance}: {instance}")
+
         role_field = instance.get('Role', 'Not Configured').strip().lower()
-        print(f"Debug: role_field for {db_instance}: {role_field}")
 
         if role_field == 'writer instance':
             return 'Writer Instance'
@@ -45,9 +46,6 @@ def get_role_information(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
-
-
-
 
 def get_rds_insights(rds_client, db_instance):
     try:
