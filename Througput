@@ -3,6 +3,18 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
+def get_instance_configuration(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+        return {
+            'MinimumCapacity': str(instance.get('MinAllocatedStorage', 'Not Configured')),
+            'MaximumCapacity': str(instance.get('MaxAllocatedStorage', 'Not Configured')),
+        }
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return {}
+
 def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -26,6 +38,9 @@ def get_rds_insights(rds_client, db_instance):
             'GlobalCluster': global_cluster_identifier,
         }
         
+        instance_configuration = get_instance_configuration(rds_client, db_instance)
+        insights.update(instance_configuration)
+
         return insights
     except ClientError as e:
         print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
@@ -46,6 +61,7 @@ def main():
             fieldnames = [
                 'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
                 'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
+                'MinimumCapacity', 'MaximumCapacity',
             ]
 
             with open(filename, 'w', newline='') as csvfile:
