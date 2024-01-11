@@ -23,6 +23,24 @@ def get_instance_configuration(rds_client, db_instance):
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
 
+def get_role_information(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        # Your logic to determine the role based on the specific fields in your environment
+        # This is just a placeholder; you need to customize it based on your actual field values
+        if 'aurora' in instance['Engine'].lower():
+            return 'Aurora Role: ' + instance.get('YourAuroraRoleField', 'Not Configured')
+
+        # Add more conditions based on your specific environment
+        # ...
+
+        return 'Role not determined'
+    except ClientError as e:
+        print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
+        return None
+
 def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -30,15 +48,12 @@ def get_rds_insights(rds_client, db_instance):
 
         global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
 
-        is_reader = instance.get('ReadReplicaSourceDBInstanceIdentifier') is not None
-        is_writer = instance.get('ReadReplicaDBInstanceIdentifiers') is not None
-
-        role = 'Reader Instance' if is_reader else ('Writer Instance' if is_writer else 'Primary Cluster')
+        role_info = get_role_information(rds_client, db_instance)
 
         insights = {
             'DBIdentifier': instance['DBInstanceIdentifier'],
             'Status': instance['DBInstanceStatus'],
-            'Role': role,
+            'Role': role_info,
             'Engine': instance['Engine'],
             'Region': rds_client.meta.region_name,
             'Size': instance['DBInstanceClass'],
