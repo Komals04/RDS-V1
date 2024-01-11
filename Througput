@@ -70,7 +70,7 @@ def main():
             fieldnames = [
                 'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
                 'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
-                'MinimumCapacity', 'MaximumCapacity', 'AuroraCapacityUnit',
+                'InstanceType', 'MaximumCapacity', 'MinimumCapacity', 'AuroraCapacityUnit',
             ]
 
             with open(filename, 'w', newline='') as csvfile:
