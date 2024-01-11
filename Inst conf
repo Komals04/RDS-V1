@@ -1,0 +1,89 @@
+import boto3
+import csv
+from datetime import datetime
+from botocore.exceptions import ClientError
+
+def get_instance_configuration(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instance_automated_backups(DBInstanceIdentifier=db_instance)
+        automated_backup = response['DBInstanceAutomatedBackups'][0]
+
+        configuration = automated_backup.get('InstanceConfigurations', [{}])[0]
+
+        instance_configuration = {
+            'InstanceType': configuration.get('InstanceClass', 'Not Configured'),
+            'MaximumCapacity': configuration.get('MaxAllocatedStorage', 'Not Configured'),
+            'MinimumCapacity': configuration.get('MinAllocatedStorage', 'Not Configured'),
+        }
+
+        return instance_configuration
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return None
+
+def get_rds_insights(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+        
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': instance['IAMDatabaseAuthenticationEnabled'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance['AllocatedStorage'],
+            'Storage': instance.get('AllocatedStorage', 'Not Configured'),
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'VPC': instance.get('DBSubnetGroups', [{}])[0].get('VpcId', 'Not Configured'),
+            'GlobalCluster': global_cluster_identifier,
+        }
+
+        instance_configuration = get_instance_configuration(rds_client, db_instance)
+        if instance_configuration:
+            insights.update(instance_configuration)
+
+        return insights
+    except ClientError as e:
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
+
+def main():
+    try:
+        # Replace 'your-region' with your AWS regions
+        regions = ['us-east-1', 'us-east-2']
+        for region in regions:
+            rds_client = boto3.client('rds', region_name=region)
+            
+            instances = rds_client.describe_db_instances()['DBInstances']
+
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            filename = f'rds_insights_{region}_{timestamp}.csv'
+
+            fieldnames = [
+                'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
+                'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
+                'InstanceType', 'MaximumCapacity', 'MinimumCapacity',
+            ]
+
+            with open(filename, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for instance in instances:
+                    insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
+                    if insights:
+                        writer.writerow(insights)
+                        print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
+
+            print(f'Completed checking and exporting RDS insights to {filename} in region {region}.')
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
