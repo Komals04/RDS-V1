@@ -28,26 +28,26 @@ def get_role_information(rds_client, db_instance):
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
-        # Commented out the line that prints instance details
-        # print(f"Debug: Instance details for {db_instance}: {instance}")
+        print(f"Debug: Instance details for {db_instance}: {instance}")
 
-        # Check if the instance is part of a global cluster
         global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+        db_cluster_role = instance.get('DBClusterRole', None)
 
         if global_cluster_identifier:
-            # Check if the instance is the primary in the global cluster
-            if instance.get('DBClusterRole') == 'WRITER':
+            print(f"Debug: DBClusterRole for {db_instance}: {db_cluster_role}")
+
+            if db_cluster_role == 'WRITER':
                 return 'Writer Instance'
-            elif instance.get('DBClusterRole') == 'READER':
+            elif db_cluster_role == 'READER':
                 return 'Reader Instance'
             else:
                 return 'Role not determined'
         else:
-            # If not part of a global cluster, consider it as a standalone instance
             return 'Standalone Instance'
     except ClientError as e:
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
+
 
 
 
