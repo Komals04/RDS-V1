@@ -28,8 +28,8 @@ def get_role_information(rds_client, db_instance):
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
-        # Print the entire instance dictionary for debugging
-        print(f"Debug: Instance details for {db_instance}: {instance}")
+        # Commented out the line that prints instance details
+        # print(f"Debug: Instance details for {db_instance}: {instance}")
 
         # Check if the instance is part of a global cluster
         global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
@@ -48,6 +48,7 @@ def get_role_information(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
+
 
 
 def get_rds_insights(rds_client, db_instance):
