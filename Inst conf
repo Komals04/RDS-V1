@@ -16,6 +16,11 @@ def get_instance_configuration(rds_client, db_instance):
             'MinimumCapacity': str(configuration.get('MinAllocatedStorage', 'Not Configured')),
         }
 
+        # Check if the instance is serverless
+        if 'Provisioned IOPS' not in instance_configuration['InstanceType']:
+            instance_configuration['MaximumCapacity'] = str(configuration.get('MaxFreeStorageSpace', 'Not Configured'))
+            instance_configuration['MinimumCapacity'] = str(configuration.get('MinFreeStorageSpace', 'Not Configured'))
+
         return instance_configuration
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
