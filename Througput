@@ -12,6 +12,10 @@ def get_instance_configuration(rds_client, db_instance):
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
             'MaximumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
             'MinimumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
+            'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
+            'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
+            'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
+            'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
         }
 
         # Check if the instance is provisioned with IOPS
