@@ -5,28 +5,33 @@ from botocore.exceptions import ClientError
 
 def get_instance_configuration(rds_client, db_instance):
     try:
-        response = rds_client.describe_db_instance_automated_backups(DBInstanceIdentifier=db_instance)
-        automated_backup = response['DBInstanceAutomatedBackups'][0]
-
-        configuration = automated_backup.get('InstanceConfigurations', [{}])[0]
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
 
         instance_configuration = {
-            'InstanceType': configuration.get('InstanceClass', 'Not Configured'),
-            'MaximumCapacity': str(configuration.get('MaxAllocatedStorage', 'Not Configured')),
-            'MinimumCapacity': str(configuration.get('MinAllocatedStorage', 'Not Configured')),
+            'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
+            'MaximumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
+            'MinimumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
         }
 
-        # Check if the instance is serverless
-        if 'Provisioned IOPS' not in instance_configuration['InstanceType']:
-            instance_configuration['MaximumCapacity'] = str(configuration.get('MaxFreeStorageSpace', 'Not Configured'))
-            instance_configuration['MinimumCapacity'] = str(configuration.get('MinFreeStorageSpace', 'Not Configured'))
+        # Check if the instance is provisioned with IOPS
+        if 'Provisioned IOPS' in instance_configuration['InstanceType']:
+            instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
 
         return instance_configuration
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
 
-def get_rds_insights(rds_client, db_instance):
+
+def get_instance_configuration(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instance_automated_backups(DBInstanceIdentifier=db_instance)
+        automated_backup = response['DBInstanceAutomatedBackups'][0]
+
+        configuration = automated_backup.get('InstanceConfigurations', [{}])[0]
+
+    def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
