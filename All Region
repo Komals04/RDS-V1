@@ -58,7 +58,37 @@ def get_role_information(rds_client, db_instance):
         return None
 
 def get_rds_insights(rds_client, db_instance):
-    # ... (unchanged)
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+
+        role_info = get_role_information(rds_client, db_instance)
+
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': role_info,
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance['AllocatedStorage'],
+            'Storage': instance.get('AllocatedStorage', 'Not Configured'),
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'VPC': instance.get('DBSubnetGroups', [{}])[0].get('VpcId', 'Not Configured'),
+            'GlobalCluster': global_cluster_identifier,
+        }
+
+        instance_configuration = get_instance_configuration(rds_client, db_instance)
+        insights.update(instance_configuration)
+
+        return insights
+    except ClientError as e:
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
 
 def get_db_cluster_info(rds_client, db_cluster_identifier):
     # ... (unchanged)
