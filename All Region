@@ -153,6 +153,16 @@ def main():
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
         ]
 
-        with open(consolidated_filename, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer
+                    writer.writeheader()
+
+            for data_entry in consolidated_data:
+                writer.writerow(data_entry)
+                print(f"Exported details for {data_entry.get('DBIdentifier', 'Unknown')}")
+
+        print(f'Completed checking and exporting RDS insights to {consolidated_filename} for all regions.')
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
+
