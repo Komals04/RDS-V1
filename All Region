@@ -153,7 +153,9 @@ def main():
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
         ]
 
-                    writer.writeheader()
+        with open(consolidated_filename, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
 
             for data_entry in consolidated_data:
                 writer.writerow(data_entry)
@@ -165,4 +167,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
