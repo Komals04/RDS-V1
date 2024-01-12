@@ -4,7 +4,37 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 def get_instance_configuration(rds_client, db_instance):
-    # ... (unchanged)
+      try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        instance_configuration = {
+            'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
+            'MaximumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
+            'MinimumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
+            'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
+            'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
+            'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
+            'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
+            'AvailabilityZone': instance.get('AvailabilityZone', 'Not Configured'),
+            'PreferredMaintenanceWindow': instance.get('PreferredMaintenanceWindow', 'Not Configured'),
+            'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
+            'MultiAZ': instance.get('MultiAZ', 'Not Configured'),
+            'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
+            'VpcSecurityGroups': [group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])],
+            'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
+            'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
+            # Add more attributes as needed
+        }
+
+        # Check if the instance is provisioned with IOPS
+        if 'Provisioned IOPS' in instance_configuration['InstanceType']:
+            instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
+
+        return instance_configuration
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return None
 
 def get_role_information(rds_client, db_instance):
     # ... (unchanged)
