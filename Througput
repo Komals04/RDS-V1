@@ -108,8 +108,12 @@ def main():
             response_instances = rds_client.describe_db_instances()
             instances = response_instances['DBInstances']
 
-            response_clusters = rds_client.describe_db_clusters()
-            clusters = response_clusters['DBClusters']
+            try:
+                response_clusters = rds_client.describe_db_clusters()
+                clusters = response_clusters['DBClusters']
+            except ClientError as e:
+                print(f"Error retrieving RDS clusters in region {region}: {e}")
+                clusters = []
 
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
             filename = f'rds_insights_{region}_{timestamp}.csv'
