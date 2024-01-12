@@ -99,8 +99,8 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
 def main():
     try:
-        ec2_client = boto3.client('ec2')
-        regions = [region['RegionName'] for region in ec2_client.describe_regions()['Regions']]
+        session = boto3.Session()
+        regions = [region['RegionName'] for region in session.get_available_regions('rds')]
 
         for region in regions:
             rds_client = boto3.client('rds', region_name=region)
