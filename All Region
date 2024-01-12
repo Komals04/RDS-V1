@@ -91,7 +91,22 @@ def get_rds_insights(rds_client, db_instance):
         return None
 
 def get_db_cluster_info(rds_client, db_cluster_identifier):
-    # ... (unchanged)
+     try:
+        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
+        db_cluster = response['DBClusters'][0]
+
+        cluster_info = {
+            'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
+            'ClusterStatus': db_cluster['Status'],
+            'ClusterEngine': db_cluster['Engine'],
+            'ClusterRegion': rds_client.meta.region_name,
+            # Add more attributes as needed
+        }
+
+        return cluster_info
+    except ClientError as e:
+        print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
+        return None
 
 def main():
     try:
