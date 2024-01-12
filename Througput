@@ -10,8 +10,6 @@ def get_instance_configuration(rds_client, db_instance):
 
         instance_configuration = {
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
-            'MaximumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
-            'MinimumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
             'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
             'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
             'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
@@ -74,11 +72,9 @@ def get_rds_insights(rds_client, db_instance):
             'Region': rds_client.meta.region_name,
             'Size': instance['DBInstanceClass'],
             'CPU': instance['AllocatedStorage'],
-            'Storage': instance.get('AllocatedStorage', 'Not Configured'),
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
-            'VPC': instance.get('DBSubnetGroups', [{}])[0].get('VpcId', 'Not Configured'),
             'GlobalCluster': global_cluster_identifier,
         }
 
@@ -126,11 +122,11 @@ def main():
 
             fieldnames = [
                 'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-                'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
-                'InstanceType', 'MaximumCapacity', 'MinimumCapacity',
-                'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId', 'PerformanceInsightsRetentionPeriod',
-                'ServerlessV2ScalingConfiguration', 'AvailabilityZone', 'PreferredMaintenanceWindow',
-                'BackupRetentionPeriod', 'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
+                'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
+                'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
+                'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
+                'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
+                'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
                 'ReadReplicaDBClusterIdentifiers',
                 'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             ]
