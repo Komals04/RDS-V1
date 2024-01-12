@@ -82,21 +82,6 @@ def get_rds_insights(rds_client, db_instance):
         print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
         return None
 
-def get_db_cluster_info(rds_client, db_cluster_identifier):
-    try:
-        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
-        cluster = response['DBClusters'][0]
-
-        return {
-            'DBClusterIdentifier': cluster['DBClusterIdentifier'],
-            'ClusterStatus': cluster['Status'],
-            'ClusterEngine': cluster['Engine'],
-            'ClusterRegion': rds_client.meta.region_name,
-        }
-    except ClientError as e:
-        print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
-        return None
-
 def main():
     try:
         session = boto3.Session()
@@ -108,13 +93,6 @@ def main():
             response_instances = rds_client.describe_db_instances()
             instances = response_instances['DBInstances']
 
-            try:
-                response_clusters = rds_client.describe_db_clusters()
-                clusters = response_clusters['DBClusters']
-            except ClientError as e:
-                print(f"Error retrieving RDS clusters in region {region}: {e}")
-                clusters = []
-
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
             filename = f'rds_insights_{region}_{timestamp}.csv'
 
@@ -125,7 +103,6 @@ def main():
                 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId', 'PerformanceInsightsRetentionPeriod',
                 'ServerlessV2ScalingConfiguration', 'AvailabilityZone', 'PreferredMaintenanceWindow',
                 'BackupRetentionPeriod', 'MultiAZ', 'PubliclyAccessible', 'DBSubnetGroupName', 'ReadReplicaDBClusterIdentifiers',
-                'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             ]
 
             with open(filename, 'w', newline='') as csvfile:
@@ -137,12 +114,6 @@ def main():
                     if insights:
                         writer.writerow(insights)
                         print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
-
-                for cluster in clusters:
-                    cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
-                    if cluster_info:
-                        writer.writerow(cluster_info)
-                        print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
             print(f'Completed checking and exporting RDS insights to {filename} in region {region}.')
     except Exception as e:
