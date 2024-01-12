@@ -120,8 +120,7 @@ def main():
                 'InstanceType', 'MaximumCapacity', 'MinimumCapacity',
                 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId', 'PerformanceInsightsRetentionPeriod',
                 'ServerlessV2ScalingConfiguration', 'AvailabilityZone', 'PreferredMaintenanceWindow',
-                'BackupRetentionPeriod', 'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-                'ReadReplicaDBClusterIdentifiers',
+                'BackupRetentionPeriod', 'MultiAZ', 'PubliclyAccessible', 'DBSubnetGroupName', 'ReadReplicaDBClusterIdentifiers',
                 'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             ]
 
