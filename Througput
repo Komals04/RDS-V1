@@ -16,6 +16,15 @@ def get_instance_configuration(rds_client, db_instance):
             'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
             'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
             'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
+            'AvailabilityZone': instance.get('AvailabilityZone', 'Not Configured'),
+            'PreferredMaintenanceWindow': instance.get('PreferredMaintenanceWindow', 'Not Configured'),
+            'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
+            'MultiAZ': instance.get('MultiAZ', 'Not Configured'),
+            'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
+            'VpcSecurityGroups': [group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])],
+            'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
+            'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
+            # Add more attributes as needed
         }
 
         # Check if the instance is provisioned with IOPS
@@ -88,7 +97,8 @@ def main():
         for region in regions:
             rds_client = boto3.client('rds', region_name=region)
             
-            instances = rds_client.describe_db_instances()['DBInstances']
+            response = rds_client.describe_db_instances()
+            instances = response['DBInstances']
 
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
             filename = f'rds_insights_{region}_{timestamp}.csv'
@@ -98,7 +108,9 @@ def main():
                 'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
                 'InstanceType', 'MaximumCapacity', 'MinimumCapacity',
                 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId', 'PerformanceInsightsRetentionPeriod',
-                'ServerlessV2ScalingConfiguration',
+                'ServerlessV2ScalingConfiguration', 'AvailabilityZone', 'PreferredMaintenanceWindow',
+                'BackupRetentionPeriod', 'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
+                'ReadReplicaDBClusterIdentifiers',  # Add more fields here as needed
             ]
 
             with open(filename, 'w', newline='') as csvfile:
