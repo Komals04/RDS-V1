@@ -20,7 +20,7 @@ def categorize_snapshot(snapshot):
 
 def get_rds_snapshots():
     # Get a list of AWS regions
-    regions = [region['RegionName'] for region in boto3.client('ec2').describe_regions()['Regions']
+    regions = [region['RegionName'] for region in boto3.client('ec2').describe_regions()['Regions']]
 
     # Specify the attributes you want in the CSV file
     attributes_to_export = [
