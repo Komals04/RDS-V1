@@ -1,0 +1,37 @@
+import boto3
+import csv
+
+def main():
+    # Initialize the RDS client
+    rds = boto3.client('rds')
+
+    # Describe DB snapshots
+    response = rds.describe_db_snapshots()
+
+    # Specify the attributes you want in the CSV file
+    attributes_to_export = [
+        'DBSnapshotIdentifier',
+        'DBInstanceIdentifier',
+        'SnapshotCreateTime',
+        'Engine',
+        'AllocatedStorage',
+        'Status',
+        'SnapshotType',
+        'StorageType'
+    ]
+
+    # Write results to CSV file
+    with open('snapshots.csv', 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        
+        # Write header
+        csv_writer.writerow(attributes_to_export)
+        
+        # Write data
+        for snapshot in response['DBSnapshots']:
+            # Extract only the specified attributes
+            row_data = [snapshot[attr] for attr in attributes_to_export]
+            csv_writer.writerow(row_data)
+
+if __name__ == "__main__":
+    main()
