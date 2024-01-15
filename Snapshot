@@ -1,12 +1,26 @@
 import boto3
 import csv
 
-def get_rds_snapshots():
-    # Initialize the RDS client for the 'us-east-1' region
-    rds = boto3.client('rds', region_name='us-east-1')
+def categorize_snapshot(snapshot):
+    # Categorize the snapshot based on attributes
+    if snapshot['SnapshotType'] == 'manual':
+        return 'Manual'
+    elif 'arn:aws:rds:iam::' in snapshot.get('DBSnapshotArn', ''):
+        return 'Shared with me'
+    elif snapshot['DBSnapshotIdentifier'].startswith('awsbackup:'):
+        return 'Backup service'
+    elif snapshot['DBSnapshotIdentifier'].startswith('rds:'):
+        return 'System'
+    elif snapshot.get('PubliclyAccessible', False):
+        return 'Public'
+    elif snapshot.get('Exported', False):
+        return 'Exports in Amazon S3'
+    else:
+        return 'Uncategorized'
 
-    # Describe DB snapshots
-    response = rds.describe_db_snapshots()
+def get_rds_snapshots():
+    # Get a list of AWS regions
+    regions = [region['RegionName'] for region in boto3.client('ec2').describe_regions()['Regions']
 
     # Specify the attributes you want in the CSV file
     attributes_to_export = [
@@ -20,18 +34,39 @@ def get_rds_snapshots():
         'StorageType'
     ]
 
+    # Additional categories
+    categories = [
+        'Category'
+    ]
+
     # Write results to CSV file
     with open('snapshots.csv', 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile)
-        
+
         # Write header
-        csv_writer.writerow(attributes_to_export)
-        
-        # Write data
-        for snapshot in response['DBSnapshots']:
-            # Extract only the specified attributes
-            row_data = [snapshot[attr] for attr in attributes_to_export]
-            csv_writer.writerow(row_data)
+        csv_writer.writerow(attributes_to_export + categories)
+
+        # Iterate over each region
+        for region in regions:
+            print(f"Fetching RDS snapshots in region: {region}")
+
+            # Initialize RDS client for the specific region
+            rds_region = boto3.client('rds', region_name=region)
+
+            # Describe RDS snapshots
+            response = rds_region.describe_db_snapshots()
+
+            # Write data
+            for snapshot in response['DBSnapshots']:
+                # Extract only the specified attributes
+                row_data = [snapshot[attr] for attr in attributes_to_export]
+
+                # Categorize the snapshot
+                category = categorize_snapshot(snapshot)
+                row_data.append(category)
+
+                # Write the row to the CSV file
+                csv_writer.writerow(row_data)
 
 if __name__ == "__main__":
     get_rds_snapshots()
