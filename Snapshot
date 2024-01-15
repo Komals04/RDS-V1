@@ -70,3 +70,11 @@ def get_rds_snapshots():
 
 if __name__ == "__main__":
     get_rds_snapshots()
+
+C:\Users\ux186612\Documents>python Snapshot.py
+Traceback (most recent call last):
+  File "C:\Users\ux186612\Documents\Snapshot.py", line 72, in <module>
+    get_rds_snapshots()
+  File "C:\Users\ux186612\Documents\Snapshot.py", line 43, in get_rds_snapshots
+    with open('snapshots.csv', 'w', newline='') as csvfile:
+PermissionError: [Errno 13] Permission denied: 'snapshots.csv'
