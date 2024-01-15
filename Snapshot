@@ -2,8 +2,8 @@ import boto3
 import csv
 
 def get_rds_snapshots():
-    # Initialize the RDS client
-    rds = boto3.client('rds')
+    # Initialize the RDS client for the 'us-east-1' region
+    rds = boto3.client('rds', region_name='us-east-1')
 
     # Describe DB snapshots
     response = rds.describe_db_snapshots()
