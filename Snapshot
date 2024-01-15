@@ -11,6 +11,8 @@ def categorize_snapshot(snapshot):
         return 'Shared with me'
     elif snapshot['DBSnapshotIdentifier'].startswith('awsbackup:'):
         return 'Backup service'
+    elif snapshot['DBSnapshotIdentifier'].startswith('rds:manual:'):
+        return 'Manual'
     elif snapshot['DBSnapshotIdentifier'].startswith('rds:'):
         return 'System'
     elif snapshot.get('PubliclyAccessible', False):
