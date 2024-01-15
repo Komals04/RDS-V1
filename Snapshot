@@ -3,6 +3,21 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
+def categorize_snapshot(snapshot):
+    # Categorize the snapshot based on attributes
+    if snapshot['SnapshotType'] == 'manual':
+        return 'Manual'
+    elif 'arn:aws:rds:iam::' in snapshot.get('DBSnapshotArn', ''):
+        return 'Shared with me'
+    elif snapshot['DBSnapshotIdentifier'].startswith('awsbackup:'):
+        return 'Backup service'
+    elif snapshot['DBSnapshotIdentifier'].startswith('rds:'):
+        return 'System'
+    elif snapshot.get('PubliclyAccessible', False):
+        return 'Public'
+    else:
+        return 'Uncategorized'
+
 def get_snapshot_insights(rds_client, snapshot):
     try:
         insights = {
@@ -14,6 +29,7 @@ def get_snapshot_insights(rds_client, snapshot):
             'Status': snapshot['Status'],
             'SnapshotType': snapshot['SnapshotType'],
             'StorageType': snapshot['StorageType'],
+            'Category': categorize_snapshot(snapshot),
         }
 
         return insights
@@ -27,9 +43,9 @@ def get_rds_snapshots(rds_client):
         snapshots = response_snapshots['DBSnapshots']
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename = f'rds_snapshots_{timestamp}.csv'
+        filename_snapshots = f'rds_snapshots_{timestamp}.csv'
 
-        fieldnames = [
+        fieldnames_snapshots = [
             'DBSnapshotIdentifier',
             'DBInstanceIdentifier',
             'SnapshotCreateTime',
@@ -38,72 +54,27 @@ def get_rds_snapshots(rds_client):
             'Status',
             'SnapshotType',
             'StorageType',
+            'Category',
         ]
 
-        with open(filename, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+        with open(filename_snapshots, 'w', newline='') as csvfile_snapshots:
+            writer_snapshots = csv.DictWriter(csvfile_snapshots, fieldnames=fieldnames_snapshots)
+            writer_snapshots.writeheader()
 
             for snapshot in snapshots:
                 insights = get_snapshot_insights(rds_client, snapshot)
                 if insights:
-                    writer.writerow(insights)
+                    writer_snapshots.writerow(insights)
                     print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
 
-        print(f'Completed checking and exporting RDS snapshots to {filename}.')
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-def main():
-    try:
-        # Replace 'your-region' with your AWS region
-        region = 'us-east-1'
-        rds_client = boto3.client('rds', region_name=region)
-
-        # Export RDS Instances and Clusters
-        response_instances = rds_client.describe_db_instances()
-        instances = response_instances['DBInstances']
-
-        response_clusters = rds_client.describe_db_clusters()
-        clusters = response_clusters['DBClusters']
-
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename_instances_clusters = f'rds_insights_{region}_{timestamp}.csv'
-
-        fieldnames_instances_clusters = [
-            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-            'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
-            'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
-            'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
-            'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
-            'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-            'ReadReplicaDBClusterIdentifiers',
-            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
-        ]
-
-        with open(filename_instances_clusters, 'w', newline='') as csvfile_instances_clusters:
-            writer_instances_clusters = csv.DictWriter(csvfile_instances_clusters, fieldnames=fieldnames_instances_clusters)
-            writer_instances_clusters.writeheader()
-
-            for instance in instances:
-                insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
-                if insights:
-                    writer_instances_clusters.writerow(insights)
-                    print(f"Exported details for RDS instance: {insights['DBIdentifier']}")
-
-            for cluster in clusters:
-                cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
-                if cluster_info:
-                    writer_instances_clusters.writerow(cluster_info)
-                    print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']}")
-
-        print(f'Completed checking and exporting RDS instances and clusters to {filename_instances_clusters}.')
-
-        # Export RDS Snapshots
-        get_rds_snapshots(rds_client)
-
+        print(f'Completed checking and exporting RDS snapshots to {filename_snapshots}.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    main()
+    # Replace 'your-region' with your actual AWS region
+    region = 'us-east-1'
+    rds_client = boto3.client('rds', region_name=region)
+
+    # Export RDS Snapshots
+    get_rds_snapshots(rds_client)
