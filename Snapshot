@@ -4,18 +4,15 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 def categorize_snapshot(snapshot):
-    # Categorize the snapshot based on attributes
     if snapshot['SnapshotType'] == 'manual':
         return 'Manual'
+    elif snapshot['SnapshotType'] == 'automated':
+        return 'System Generated'
     elif 'arn:aws:rds:iam::' in snapshot.get('DBSnapshotArn', ''):
         return 'Shared with me'
-    elif snapshot['DBSnapshotIdentifier'].startswith('awsbackup:'):
-        return 'Backup service'
-    elif snapshot['DBSnapshotIdentifier'].startswith('rds:manual:'):
-        return 'Manual'
     elif snapshot['DBSnapshotIdentifier'].startswith('rds:'):
-        return 'System'
-    elif snapshot.get('PubliclyAccessible', False):
+        return 'Backup service'
+    elif snapshot.get('Public', False):
         return 'Public'
     else:
         return 'Uncategorized'
