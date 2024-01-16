@@ -36,11 +36,22 @@ def get_snapshot_insights(rds_client, snapshot):
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
         return None
 
+def get_cluster_snapshot_attributes(rds_client, cluster_snapshot_identifier):
+    try:
+        response = rds_client.describe_db_cluster_snapshots(DBClusterSnapshotIdentifier=cluster_snapshot_identifier)
+        attributes = response['DBClusterSnapshots'][0].get('Attributes', [])
+
+        return attributes
+    except ClientError as e:
+        print(f"Error retrieving attributes for RDS cluster snapshot {cluster_snapshot_identifier}: {e}")
+        return None
+
 def get_rds_snapshots(rds_client):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename_snapshots = f'rds_snapshots_{timestamp}.csv'
 
+        # Export RDS snapshots
+        filename_snapshots = f'rds_snapshots_{timestamp}.csv'
         fieldnames_snapshots = [
             'DBSnapshotIdentifier',
             'DBInstanceIdentifier',
@@ -57,11 +68,11 @@ def get_rds_snapshots(rds_client):
             writer_snapshots = csv.DictWriter(csvfile_snapshots, fieldnames=fieldnames_snapshots)
             writer_snapshots.writeheader()
 
-            next_token = None
+            next_token_snapshots = None
             while True:
                 # Describe RDS snapshots with pagination
-                if next_token:
-                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token)
+                if next_token_snapshots:
+                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token_snapshots)
                 else:
                     response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
 
@@ -73,11 +84,63 @@ def get_rds_snapshots(rds_client):
                         writer_snapshots.writerow(insights)
                         print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
 
-                next_token = response_snapshots.get('Marker')
-                if not next_token:
+                next_token_snapshots = response_snapshots.get('Marker')
+                if not next_token_snapshots:
                     break
 
         print(f'Completed checking and exporting RDS snapshots to {filename_snapshots}.')
+
+        # Export RDS cluster snapshots
+        filename_cluster_snapshots = f'rds_cluster_snapshots_{timestamp}.csv'
+        fieldnames_cluster_snapshots = [
+            'DBClusterSnapshotIdentifier',
+            'DBClusterIdentifier',
+            'SnapshotCreateTime',
+            'Engine',
+            'AllocatedStorage',
+            'Status',
+            'SnapshotType',
+            'StorageType',
+            'Category',
+            'AdditionalAttributes',
+        ]
+
+        with open(filename_cluster_snapshots, 'w', newline='') as csvfile_cluster_snapshots:
+            writer_cluster_snapshots = csv.DictWriter(csvfile_cluster_snapshots, fieldnames=fieldnames_cluster_snapshots)
+            writer_cluster_snapshots.writeheader()
+
+            next_token_cluster_snapshots = None
+            while True:
+                # Describe RDS cluster snapshots with pagination
+                if next_token_cluster_snapshots:
+                    response_cluster_snapshots = rds_client.describe_db_cluster_snapshots(MaxRecords=100, Marker=next_token_cluster_snapshots)
+                else:
+                    response_cluster_snapshots = rds_client.describe_db_cluster_snapshots(MaxRecords=100)
+
+                all_cluster_snapshots = response_cluster_snapshots['DBClusterSnapshots']
+
+                for cluster_snapshot in all_cluster_snapshots:
+                    insights_cluster = {
+                        'DBClusterSnapshotIdentifier': cluster_snapshot['DBClusterSnapshotIdentifier'],
+                        'DBClusterIdentifier': cluster_snapshot['DBClusterIdentifier'],
+                        'SnapshotCreateTime': cluster_snapshot['SnapshotCreateTime'],
+                        'Engine': cluster_snapshot['Engine'],
+                        'AllocatedStorage': cluster_snapshot['AllocatedStorage'],
+                        'Status': cluster_snapshot['Status'],
+                        'SnapshotType': cluster_snapshot['SnapshotType'],
+                        'StorageType': cluster_snapshot.get('StorageType', 'Not Configured'),
+                        'Category': categorize_snapshot(cluster_snapshot),
+                        'AdditionalAttributes': get_cluster_snapshot_attributes(rds_client, cluster_snapshot['DBClusterSnapshotIdentifier']),
+                    }
+
+                    writer_cluster_snapshots.writerow(insights_cluster)
+                    print(f"Exported details for RDS cluster snapshot: {insights_cluster['DBClusterSnapshotIdentifier']}")
+
+                next_token_cluster_snapshots = response_cluster_snapshots.get('Marker')
+                if not next_token_cluster_snapshots:
+                    break
+
+        print(f'Completed checking and exporting RDS cluster snapshots to {filename_cluster_snapshots}.')
 
     except Exception as e:
         print(f"An error occurred: {e}")
