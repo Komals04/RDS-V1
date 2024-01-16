@@ -60,7 +60,11 @@ def get_rds_snapshots(rds_client):
             next_token = None
             while True:
                 # Describe RDS snapshots with pagination
-                response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token)
+                if next_token:
+                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token)
+                else:
+                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
+
                 all_snapshots = response_snapshots['DBSnapshots']
 
                 for snapshot in all_snapshots:
