@@ -27,7 +27,7 @@ def get_snapshot_insights(rds_client, snapshot):
             'AllocatedStorage': snapshot['AllocatedStorage'],
             'Status': snapshot['Status'],
             'SnapshotType': snapshot['SnapshotType'],
-            'StorageType': snapshot['StorageType'],
+            'StorageType': snapshot.get('StorageType', 'Not Configured'),  # Handle missing 'StorageType'
             'Category': categorize_snapshot(snapshot),
         }
 
@@ -111,7 +111,7 @@ def get_rds_snapshots(rds_client):
                     'AllocatedStorage': cluster_snapshot['AllocatedStorage'],
                     'Status': cluster_snapshot['Status'],
                     'SnapshotType': cluster_snapshot['SnapshotType'],
-                    'StorageType': cluster_snapshot['StorageType'],
+                    'StorageType': cluster_snapshot.get('StorageType', 'Not Configured'),  # Handle missing 'StorageType'
                     'Category': categorize_snapshot(cluster_snapshot),
                     'AdditionalAttributes': get_cluster_snapshot_attributes(rds_client, cluster_snapshot['DBClusterSnapshotIdentifier']),
                 }
@@ -120,14 +120,9 @@ def get_rds_snapshots(rds_client):
                 print(f"Exported details for RDS cluster snapshot: {insights_cluster['DBClusterSnapshotIdentifier']}")
 
         print(f'Completed checking and exporting RDS cluster snapshots to {filename_cluster_snapshots}.')
-
     except Exception as e:
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # Replace 'your-region' with your actual AWS region
-    region = 'us-east-1'
-    rds_client = boto3.client('rds', region_name=region)
-
-    # Export RDS Snapshots
+    rds_client = boto3.client('rds', region_name='your-region')  # Replace 'your-region' with your actual AWS region
     get_rds_snapshots(rds_client)
