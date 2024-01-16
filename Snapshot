@@ -148,4 +148,7 @@ def get_rds_snapshots(rds_client):
 if __name__ == "__main__":
     # Replace 'your-region' with your actual AWS region
     region = 'us-east-1'
-    rds_client = boto3.client('rds', region
+    rds_client = boto3.client('rds', region_name=region)
+
+    # Export RDS Snapshots and Cluster Snapshots
+    get_rds_snapshots(rds_client)
