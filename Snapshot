@@ -127,5 +127,5 @@ def get_rds_snapshots(rds_client):
 if __name__ == "__main__":
     # Configuring a session with proxy settings
     session = boto3.session.Session()
-    rds_client = session.client('rds', region_name='your-region', config=Config(proxies={'https': 'your-proxy-url'}))
+    rds_client = session.client('rds', region_name='your-region', config=Config(proxies={'https': 'http://VIVASOEUSR-proxy.vanguard.com:80'}))
     get_rds_snapshots(rds_client)
