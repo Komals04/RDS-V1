@@ -38,10 +38,6 @@ def get_snapshot_insights(rds_client, snapshot):
 
 def get_rds_snapshots(rds_client):
     try:
-        # Describe RDS snapshots with pagination
-        response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
-        all_snapshots = response_snapshots['DBSnapshots']
-
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         filename_snapshots = f'rds_snapshots_{timestamp}.csv'
 
@@ -61,11 +57,21 @@ def get_rds_snapshots(rds_client):
             writer_snapshots = csv.DictWriter(csvfile_snapshots, fieldnames=fieldnames_snapshots)
             writer_snapshots.writeheader()
 
-            for snapshot in all_snapshots:
-                insights = get_snapshot_insights(rds_client, snapshot)
-                if insights:
-                    writer_snapshots.writerow(insights)
-                    print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
+            next_token = None
+            while True:
+                # Describe RDS snapshots with pagination
+                response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token)
+                all_snapshots = response_snapshots['DBSnapshots']
+
+                for snapshot in all_snapshots:
+                    insights = get_snapshot_insights(rds_client, snapshot)
+                    if insights:
+                        writer_snapshots.writerow(insights)
+                        print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
+
+                next_token = response_snapshots.get('Marker')
+                if not next_token:
+                    break
 
         print(f'Completed checking and exporting RDS snapshots to {filename_snapshots}.')
 
