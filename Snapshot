@@ -36,10 +36,32 @@ def get_snapshot_insights(rds_client, snapshot):
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
         return None
 
+def get_all_rds_snapshots(rds_client):
+    all_snapshots = []
+    marker = None
+
+    while True:
+        try:
+            # Use MaxRecords and Marker to retrieve all snapshots
+            response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=marker)
+            snapshots = response_snapshots['DBSnapshots']
+
+            all_snapshots.extend(snapshots)
+
+            # Check if there are more snapshots available
+            if 'Marker' in response_snapshots:
+                marker = response_snapshots['Marker']
+            else:
+                break
+        except Exception as e:
+            print(f"An error occurred while fetching snapshots: {e}")
+            break
+
+    return all_snapshots
+
 def get_rds_snapshots(rds_client):
     try:
-        response_snapshots = rds_client.describe_db_snapshots()
-        snapshots = response_snapshots['DBSnapshots']
+        all_snapshots = get_all_rds_snapshots(rds_client)
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         filename_snapshots = f'rds_snapshots_{timestamp}.csv'
@@ -60,7 +82,7 @@ def get_rds_snapshots(rds_client):
             writer_snapshots = csv.DictWriter(csvfile_snapshots, fieldnames=fieldnames_snapshots)
             writer_snapshots.writeheader()
 
-            for snapshot in snapshots:
+            for snapshot in all_snapshots:
                 insights = get_snapshot_insights(rds_client, snapshot)
                 if insights:
                     writer_snapshots.writerow(insights)
