@@ -38,14 +38,8 @@ def get_snapshot_insights(rds_client, snapshot):
 
 def get_rds_snapshots(rds_client):
     try:
-        # Additional parameters for filtering snapshots
-        filters = [
-            {'Name': 'db-instance-id', 'Values': ['your-db-instance-id']},
-            # Add more filters as needed
-        ]
-
         # Describe RDS snapshots with pagination
-        response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Filters=filters)
+        response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
         all_snapshots = response_snapshots['DBSnapshots']
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -79,9 +73,8 @@ def get_rds_snapshots(rds_client):
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # Replace 'your-region' and 'your-db-instance-id' with your actual AWS region and DB instance ID
+    # Replace 'your-region' with your actual AWS region
     region = 'us-east-1'
-    db_instance_id = 'your-db-instance-id'
     rds_client = boto3.client('rds', region_name=region)
 
     # Export RDS Snapshots
