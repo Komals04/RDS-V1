@@ -38,19 +38,19 @@ def get_snapshot_insights(rds_client, snapshot):
 
 def get_all_rds_snapshots(rds_client):
     all_snapshots = []
-    marker = None
+    next_token = None
 
     while True:
         try:
-            # Use MaxRecords and Marker to retrieve all snapshots
-            response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=marker)
+            # Use NextToken for pagination
+            response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, NextToken=next_token)
             snapshots = response_snapshots['DBSnapshots']
 
             all_snapshots.extend(snapshots)
 
             # Check if there are more snapshots available
-            if 'Marker' in response_snapshots:
-                marker = response_snapshots['Marker']
+            if 'NextToken' in response_snapshots:
+                next_token = response_snapshots['NextToken']
             else:
                 break
         except Exception as e:
