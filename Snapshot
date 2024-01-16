@@ -1,5 +1,4 @@
 import boto3
-from botocore.config import Config
 import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
@@ -28,23 +27,13 @@ def get_snapshot_insights(rds_client, snapshot):
             'AllocatedStorage': snapshot['AllocatedStorage'],
             'Status': snapshot['Status'],
             'SnapshotType': snapshot['SnapshotType'],
-            'StorageType': snapshot.get('StorageType', 'Not Configured'),  # Handle missing 'StorageType'
+            'StorageType': snapshot['StorageType'],
             'Category': categorize_snapshot(snapshot),
         }
 
         return insights
     except ClientError as e:
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
-        return None
-
-def get_cluster_snapshot_attributes(rds_client, cluster_snapshot_identifier):
-    try:
-        response = rds_client.describe_db_cluster_snapshots(DBClusterSnapshotIdentifier=cluster_snapshot_identifier)
-        attributes = response['DBClusterSnapshots'][0].get('Attributes', [])
-
-        return attributes
-    except ClientError as e:
-        print(f"Error retrieving attributes for RDS cluster snapshot {cluster_snapshot_identifier}: {e}")
         return None
 
 def get_rds_snapshots(rds_client):
@@ -96,7 +85,6 @@ def get_rds_snapshots(rds_client):
             'SnapshotType',
             'StorageType',
             'Category',
-            'AdditionalAttributes',
         ]
 
         with open(filename_cluster_snapshots, 'w', newline='') as csvfile_cluster_snapshots:
@@ -112,20 +100,22 @@ def get_rds_snapshots(rds_client):
                     'AllocatedStorage': cluster_snapshot['AllocatedStorage'],
                     'Status': cluster_snapshot['Status'],
                     'SnapshotType': cluster_snapshot['SnapshotType'],
-                    'StorageType': cluster_snapshot.get('StorageType', 'Not Configured'),  # Handle missing 'StorageType'
+                    'StorageType': cluster_snapshot['StorageType'],
                     'Category': categorize_snapshot(cluster_snapshot),
-                    'AdditionalAttributes': get_cluster_snapshot_attributes(rds_client, cluster_snapshot['DBClusterSnapshotIdentifier']),
                 }
 
                 writer_cluster_snapshots.writerow(insights_cluster)
                 print(f"Exported details for RDS cluster snapshot: {insights_cluster['DBClusterSnapshotIdentifier']}")
 
         print(f'Completed checking and exporting RDS cluster snapshots to {filename_cluster_snapshots}.')
+
     except Exception as e:
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # Configuring a session with proxy settings
-    session = boto3.session.Session()
-    rds_client = session.client('rds', region_name='your-region', config=Config(proxies={'https': 'http://VIVASOEUSR-proxy.vanguard.com:80'}))
+    # Replace 'your-region' with your actual AWS region
+    region = 'us-east-1'
+    rds_client = boto3.client('rds', region_name=region)
+
+    # Export RDS Snapshots
     get_rds_snapshots(rds_client)
