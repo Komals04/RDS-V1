@@ -38,8 +38,8 @@ def get_snapshot_insights(rds_client, snapshot):
 
 def get_cluster_snapshot_attributes(rds_client, cluster_snapshot_identifier):
     try:
-        response = rds_client.describe_db_cluster_snapshot_attributes(DBClusterSnapshotIdentifier=cluster_snapshot_identifier)
-        attributes = response['DBClusterSnapshotAttributesResult']['DBClusterSnapshotAttributes']
+        response = rds_client.describe_db_cluster_snapshots(DBClusterSnapshotIdentifier=cluster_snapshot_identifier)
+        attributes = response['DBClusterSnapshots'][0].get('Attributes', [])
 
         return attributes
     except ClientError as e:
