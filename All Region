@@ -10,8 +10,6 @@ def get_instance_configuration(rds_client, db_instance):
 
         instance_configuration = {
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
-            'MaximumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
-            'MinimumCapacity': str(instance.get('AllocatedStorage', 'Not Configured')),
             'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
             'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
             'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
@@ -74,11 +72,9 @@ def get_rds_insights(rds_client, db_instance):
             'Region': rds_client.meta.region_name,
             'Size': instance['DBInstanceClass'],
             'CPU': instance['AllocatedStorage'],
-            'Storage': instance.get('AllocatedStorage', 'Not Configured'),
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
-            'VPC': instance.get('DBSubnetGroups', [{}])[0].get('VpcId', 'Not Configured'),
             'GlobalCluster': global_cluster_identifier,
         }
 
@@ -110,58 +106,47 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
 def main():
     try:
-        # Get all available AWS regions for RDS
-        session = boto3.Session()
-        regions = [region['RegionName'] for region in session.get_available_regions('rds')]
-
-        consolidated_data = []
-
+        regions = boto3.Session().get_available_regions('rds')  # Get all available regions
         for region in regions:
             rds_client = boto3.client('rds', region_name=region)
             
             response_instances = rds_client.describe_db_instances()
             instances = response_instances['DBInstances']
 
-            try:
-                response_clusters = rds_client.describe_db_clusters()
-                clusters = response_clusters['DBClusters']
-            except ClientError as e:
-                print(f"Error retrieving RDS clusters in region {region}: {e}")
-                clusters = []
+            response_clusters = rds_client.describe_db_clusters()
+            clusters = response_clusters['DBClusters']
 
-            for instance in instances:
-                insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
-                if insights:
-                    consolidated_data.append(insights)
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            filename = f'rds_insights_{region}_{timestamp}.csv'
 
-            for cluster in clusters:
-                cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
-                if cluster_info:
-                    consolidated_data.append(cluster_info)
+            fieldnames = [
+                'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
+                'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
+                'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
+                'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
+                'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
+                'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
+                'ReadReplicaDBClusterIdentifiers',
+                'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
+            ]
 
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        consolidated_filename = f'rds_insights_all_regions_{timestamp}.csv'
+            with open(filename, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
 
-        fieldnames = [
-            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-            'Storage', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'VPC', 'GlobalCluster',
-            'InstanceType', 'MaximumCapacity', 'MinimumCapacity',
-            'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId', 'PerformanceInsightsRetentionPeriod',
-            'ServerlessV2ScalingConfiguration', 'AvailabilityZone', 'PreferredMaintenanceWindow',
-            'BackupRetentionPeriod', 'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-            'ReadReplicaDBClusterIdentifiers',
-            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
-        ]
+                for instance in instances:
+                    insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
+                    if insights:
+                        writer.writerow(insights)
+                        print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
-        with open(consolidated_filename, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+                for cluster in clusters:
+                    cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
+                    if cluster_info:
+                        writer.writerow(cluster_info)
+                        print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
-            for data_entry in consolidated_data:
-                writer.writerow(data_entry)
-                print(f"Exported details for {data_entry.get('DBIdentifier', 'Unknown')}")
-
-        print(f'Completed checking and exporting RDS insights to {consolidated_filename} for all regions.')
+            print(f'Completed checking and exporting RDS insights to {filename} in region {region}.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
