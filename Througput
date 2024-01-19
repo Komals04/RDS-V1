@@ -22,6 +22,8 @@ def get_instance_configuration(rds_client, db_instance):
             'VpcSecurityGroups': [group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])],
             'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
             'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
+            'CPU': instance.get('ProcessorFeatures', [{}])[0].get('Name', 'Not Configured'),
+            'RAM': instance.get('DBInstanceClass', 'Not Configured'),
             # Add more attributes as needed
         }
 
@@ -71,7 +73,8 @@ def get_rds_insights(rds_client, db_instance):
             'Engine': instance['Engine'],
             'Region': rds_client.meta.region_name,
             'Size': instance['DBInstanceClass'],
-            'CPU': instance['AllocatedStorage'],
+            'CPU': instance.get('ProcessorFeatures', [{}])[0].get('Name', 'Not Configured'),
+            'RAM': instance.get('DBInstanceClass', 'Not Configured'),
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
@@ -114,7 +117,7 @@ def main():
 
         fieldnames = [
             'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-            'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
+            'RAM', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
             'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
             'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
             'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
