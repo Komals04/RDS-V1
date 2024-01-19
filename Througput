@@ -3,11 +3,6 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-import boto3
-import csv
-from datetime import datetime
-from botocore.exceptions import ClientError
-
 def get_instance_configuration(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -43,9 +38,6 @@ def get_instance_configuration(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
-
-# ... (unchanged)
-
 
 def get_role_information(rds_client, db_instance):
     try:
@@ -130,7 +122,7 @@ def main():
             'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
             'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
             'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-            'ReadReplicaDBClusterIdentifiers', 'ProcessorFeatures',
+            'ReadReplicaDBClusterIdentifiers', 'ProcessorFeatures', 'CoreCount',
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
         ]
 
