@@ -8,6 +8,8 @@ def get_instance_configuration(rds_client, db_instance):
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
+        processor_features = instance.get('ProcessorFeatures', [])
+        
         instance_configuration = {
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
             'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
@@ -22,6 +24,7 @@ def get_instance_configuration(rds_client, db_instance):
             'VpcSecurityGroups': [group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])],
             'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
             'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
+            'ProcessorFeatures': processor_features,
         }
 
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
@@ -105,32 +108,32 @@ def main():
     try:
         regions = ['us-east-1', 'us-east-2']  # Hardcoded regions
 
-        for region in regions:
-            rds_client = boto3.client('rds', region_name=region)
-            
-            response_instances = rds_client.describe_db_instances()
-            instances = response_instances['DBInstances']
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        filename = f'rds_insights_combined_{timestamp}.csv'  # Single CSV file for both regions
 
-            response_clusters = rds_client.describe_db_clusters()
-            clusters = response_clusters['DBClusters']
+        fieldnames = [
+            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
+            'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
+            'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
+            'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
+            'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
+            'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
+            'ReadReplicaDBClusterIdentifiers', 'ProcessorFeatures',
+            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
+        ]
 
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            filename = f'rds_insights_{region}_{timestamp}.csv'
+        with open(filename, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
 
-            fieldnames = [
-                'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-                'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
-                'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
-                'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
-                'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
-                'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-                'ReadReplicaDBClusterIdentifiers',
-                'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
-            ]
+            for region in regions:
+                rds_client = boto3.client('rds', region_name=region)
+                
+                response_instances = rds_client.describe_db_instances()
+                instances = response_instances['DBInstances']
 
-            with open(filename, 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
+                response_clusters = rds_client.describe_db_clusters()
+                clusters = response_clusters['DBClusters']
 
                 for instance in instances:
                     insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
@@ -144,7 +147,7 @@ def main():
                         writer.writerow(cluster_info)
                         print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
-            print(f'Completed checking and exporting RDS insights to {filename} in region {region}.')
+            print(f'Completed checking and exporting RDS insights to {filename} for both regions.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
