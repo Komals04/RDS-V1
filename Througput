@@ -3,24 +3,6 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-def describe_valid_db_instance_modifications(rds_client, db_instance):
-    try:
-        response = rds_client.describe_valid_db_instance_modifications(DBInstanceIdentifier=db_instance)
-        modifications = response.get('ValidDBInstanceModificationsMessage', {}).get('Storage', {}).get('ProvisionedIops', [])
-        return ', '.join([str(modification) for modification in modifications])
-    except ClientError as e:
-        print(f"Error retrieving valid DB instance modifications for {db_instance}: {e}")
-        return 'Not Configured'
-
-def describe_db_engine_versions(rds_client):
-    try:
-        response = rds_client.describe_db_engine_versions()
-        engine_versions = response.get('DBEngineVersions', [])
-        return ', '.join([engine['EngineVersion'] for engine in engine_versions])
-    except ClientError as e:
-        print(f"Error retrieving DB engine versions: {e}")
-        return 'Not Configured'
-
 def get_instance_configuration(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
