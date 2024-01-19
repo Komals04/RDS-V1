@@ -87,6 +87,7 @@ def get_rds_insights(rds_client, db_instance):
 
         role_info = get_role_information(rds_client, db_instance)
 
+        processor_features = instance.get('ProcessorFeatures', [{}])[0]
         insights = {
             'DBIdentifier': instance['DBInstanceIdentifier'],
             'Status': instance['DBInstanceStatus'],
@@ -94,9 +95,9 @@ def get_rds_insights(rds_client, db_instance):
             'Engine': instance['Engine'],
             'Region': rds_client.meta.region_name,
             'Size': instance['DBInstanceClass'],
-            'CPU': instance.get('ProcessorFeatures', [{}])[0].get('Name', 'Not Configured'),
-            'coreCount': instance.get('ProcessorFeatures', [{}])[0].get('coreCount', 'Not Configured'),
-            'threadsPerCore': instance.get('ProcessorFeatures', [{}])[0].get('threadsPerCore', 'Not Configured'),
+            'CPU': processor_features.get('Name', 'Not Configured'),
+            'coreCount': processor_features.get('coreCount', 'Not Configured'),
+            'threadsPerCore': processor_features.get('threadsPerCore', 'Not Configured'),
             'RAM': instance.get('DBInstanceClass', 'Not Configured'),
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
