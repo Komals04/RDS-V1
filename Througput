@@ -3,15 +3,22 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
+def extract_core_count(processor_features):
+    for feature in processor_features:
+        if feature.get('Name') == 'coreCount':
+            return feature.get('Value', 'Not Configured')
+    return 'Not Configured'
+
 def get_instance_configuration(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
         processor_features = instance.get('ProcessorFeatures', [])
-
-        # Extracting coreCount from ProcessorFeatures
-        core_count = next((feature['Value'] for feature in processor_features if feature['Name'] == 'coreCount'), 'Not Configured')
+        core_count = extract_core_count(processor_features)
+        
+        # Fetch vCPU information
+        vcpu = instance.get('vCPU', 'Not Configured')
 
         instance_configuration = {
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
@@ -28,7 +35,8 @@ def get_instance_configuration(rds_client, db_instance):
             'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
             'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
             'ProcessorFeatures': processor_features,
-            'CoreCount': core_count,  # Added coreCount to instance_configuration
+            'CoreCount': core_count,
+            'vCPU': vcpu,  # Added vCPU to instance_configuration
         }
 
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
@@ -116,7 +124,7 @@ def main():
         filename = f'rds_insights_combined_{timestamp}.csv'  # Single CSV file for both regions
 
         fieldnames = [
-            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
+            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU', 'vCPU',
             'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
             'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
             'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
