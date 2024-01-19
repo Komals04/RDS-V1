@@ -3,13 +3,21 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
+import boto3
+import csv
+from datetime import datetime
+from botocore.exceptions import ClientError
+
 def get_instance_configuration(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
         processor_features = instance.get('ProcessorFeatures', [])
-        
+
+        # Extracting coreCount from ProcessorFeatures
+        core_count = next((feature['Value'] for feature in processor_features if feature['Name'] == 'coreCount'), 'Not Configured')
+
         instance_configuration = {
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
             'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
@@ -25,6 +33,7 @@ def get_instance_configuration(rds_client, db_instance):
             'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
             'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
             'ProcessorFeatures': processor_features,
+            'CoreCount': core_count,  # Added coreCount to instance_configuration
         }
 
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
@@ -34,6 +43,9 @@ def get_instance_configuration(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
+
+# ... (unchanged)
+
 
 def get_role_information(rds_client, db_instance):
     try:
