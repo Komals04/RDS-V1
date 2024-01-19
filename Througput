@@ -3,7 +3,132 @@ import csv
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-# ... (the rest of your code remains unchanged)
+def describe_valid_db_instance_modifications(rds_client, db_instance):
+    try:
+        response = rds_client.describe_valid_db_instance_modifications(DBInstanceIdentifier=db_instance)
+        modifications = response.get('ValidDBInstanceModificationsMessage', {}).get('Storage', {}).get('ProvisionedIops', [])
+        return ', '.join([str(modification) for modification in modifications])
+    except ClientError as e:
+        print(f"Error retrieving valid DB instance modifications for {db_instance}: {e}")
+        return 'Not Configured'
+
+def describe_db_engine_versions(rds_client):
+    try:
+        response = rds_client.describe_db_engine_versions()
+        engine_versions = response.get('DBEngineVersions', [])
+        return ', '.join([engine['EngineVersion'] for engine in engine_versions])
+    except ClientError as e:
+        print(f"Error retrieving DB engine versions: {e}")
+        return 'Not Configured'
+
+def get_instance_configuration(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        instance_configuration = {
+            'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
+            'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
+            'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
+            'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
+            'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
+            'AvailabilityZone': instance.get('AvailabilityZone', 'Not Configured'),
+            'PreferredMaintenanceWindow': instance.get('PreferredMaintenanceWindow', 'Not Configured'),
+            'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
+            'MultiAZ': instance.get('MultiAZ', 'Not Configured'),
+            'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
+            'VpcSecurityGroups': [group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])],
+            'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
+            'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
+            'CPU': instance.get('ProcessorFeatures', [{}])[0].get('Name', 'Not Configured'),
+            'coreCount': instance.get('ProcessorFeatures', [{}])[0].get('coreCount', 'Not Configured'),
+            'threadsPerCore': instance.get('ProcessorFeatures', [{}])[0].get('threadsPerCore', 'Not Configured'),
+            'RAM': instance.get('DBInstanceClass', 'Not Configured'),
+            'ProvisionedIOPS': describe_valid_db_instance_modifications(rds_client, db_instance),
+            # Add more attributes as needed
+        }
+
+        # Check if the instance is provisioned with IOPS
+        if 'Provisioned IOPS' in instance_configuration['InstanceType']:
+            instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
+
+        return instance_configuration
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return None
+
+def get_role_information(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+        db_cluster_role = instance.get('DBClusterRole', None)
+
+        if global_cluster_identifier:
+            if db_cluster_role == 'WRITER':
+                return 'Writer Instance'
+            elif db_cluster_role == 'READER':
+                return 'Reader Instance'
+            else:
+                return 'Role not determined'
+        else:
+            return 'Standalone Instance'
+    except ClientError as e:
+        print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
+        return None
+
+def get_rds_insights(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+
+        role_info = get_role_information(rds_client, db_instance)
+
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': role_info,
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance.get('ProcessorFeatures', [{}])[0].get('Name', 'Not Configured'),
+            'coreCount': instance.get('ProcessorFeatures', [{}])[0].get('coreCount', 'Not Configured'),
+            'threadsPerCore': instance.get('ProcessorFeatures', [{}])[0].get('threadsPerCore', 'Not Configured'),
+            'RAM': instance.get('DBInstanceClass', 'Not Configured'),
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'GlobalCluster': global_cluster_identifier,
+        }
+
+        instance_configuration = get_instance_configuration(rds_client, db_instance)
+        insights.update(instance_configuration)
+
+        return insights
+    except ClientError as e:
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
+
+def get_db_cluster_info(rds_client, db_cluster_identifier):
+    try:
+        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
+        db_cluster = response['DBClusters'][0]
+
+        cluster_info = {
+            'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
+            'ClusterStatus': db_cluster['Status'],
+            'ClusterEngine': db_cluster['Engine'],
+            'ClusterRegion': rds_client.meta.region_name,
+            # Add more attributes as needed
+        }
+
+        return cluster_info
+    except ClientError as e:
+        print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
+        return None
 
 def main():
     try:
@@ -15,12 +140,12 @@ def main():
 
         fieldnames = [
             'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU',
-            'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
+            'coreCount', 'threadsPerCore', 'RAM', 'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
             'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
             'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
             'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
             'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-            'ReadReplicaDBClusterIdentifiers',
+            'ReadReplicaDBClusterIdentifiers', 'DBEngineVersions',
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
         ]
 
@@ -40,6 +165,7 @@ def main():
                 for instance in instances:
                     insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
                     if insights:
+                        insights['DBEngineVersions'] = describe_db_engine_versions(rds_client)
                         writer.writerow(insights)
                         print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
