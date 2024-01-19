@@ -26,6 +26,9 @@ def get_instance_configuration(rds_client, db_instance):
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
+        # Retrieve the first item in ProcessorFeatures list, if available
+        processor_features = instance.get('ProcessorFeatures', [{}])[0]
+
         instance_configuration = {
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
             'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
@@ -40,8 +43,8 @@ def get_instance_configuration(rds_client, db_instance):
             'VpcSecurityGroups': [group['VpcSecurityGroupId'] for group in instance.get('VpcSecurityGroups', [])],
             'DBSubnetGroupName': instance.get('DBSubnetGroup', {}).get('DBSubnetGroupName', 'Not Configured'),
             'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
-            'CPU': instance.get('ProcessorFeatures', [{}])[0].get('Name', 'Not Configured'),
-            'coreCount': instance.get('ProcessorFeatures', [{}])[0].get('coreCount', 'Not Configured'),
+            'CPU': processor_features.get('Name', 'Not Configured'),
+            'coreCount': processor_features.get('coreCount', 'Not Configured'),
             'RAM': instance.get('DBInstanceClass', 'Not Configured'),
             'ProvisionedIOPS': describe_valid_db_instance_modifications(rds_client, db_instance),
             # Add more attributes as needed
@@ -55,6 +58,7 @@ def get_instance_configuration(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
+
 
 def get_role_information(rds_client, db_instance):
     try:
