@@ -75,6 +75,33 @@ def get_role_information(rds_client, db_instance):
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
 
+def flatten_db_cluster_members(db_cluster_members):
+    return [
+        {
+            'DBClusterIdentifier': member['DBClusterIdentifier'],
+            'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
+            'DBClusterParameterGroupStatus': member.get('DBClusterParameterGroupStatus', 'Not Configured'),
+            'PromotionTier': member.get('PromotionTier', 'Not Configured')
+        } for member in db_cluster_members
+    ]
+
+def flatten_vpc_security_groups(vpc_security_groups):
+    return [
+        {
+            'VpcSecurityGroupId': group['VpcSecurityGroupId'],
+            'Status': group.get('Status', 'Not Configured')
+        } for group in vpc_security_groups
+    ]
+
+def flatten_associated_roles(associated_roles):
+    return [
+        {
+            'RoleArn': role['RoleArn'],
+            'Status': role.get('Status', 'Not Configured'),
+            'FeatureName': role.get('FeatureName', 'Not Configured')
+        } for role in associated_roles
+    ]
+
 def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -124,9 +151,9 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
             # Add more attributes from the describe_db_clusters response as needed
 
-            'DBClusterMembers': flatten_nested_attributes(db_cluster.get('DBClusterMembers', [])),
-            'VpcSecurityGroups': flatten_nested_attributes(db_cluster.get('VpcSecurityGroups', [])),
-            'AssociatedRoles': flatten_nested_attributes(db_cluster.get('AssociatedRoles', [])),
+            'DBClusterMembers': flatten_db_cluster_members(db_cluster.get('DBClusterMembers', [])),
+            'VpcSecurityGroups': flatten_vpc_security_groups(db_cluster.get('VpcSecurityGroups', [])),
+            'AssociatedRoles': flatten_associated_roles(db_cluster.get('AssociatedRoles', [])),
             'DomainMemberships': db_cluster.get('DomainMemberships', []),
             'TagList': db_cluster.get('TagList', []),
             'ScalingConfigurationInfo': db_cluster.get('ScalingConfigurationInfo', {}),
