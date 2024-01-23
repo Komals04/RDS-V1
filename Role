@@ -10,7 +10,11 @@ def extract_core_count(processor_features):
     return 'Not Configured'
 
 def flatten_nested_attributes(items):
-    return ', '.join([f"{k}: {v}" for item in items for k, v in item.items()])
+    return [
+        {f"{k}_{sub_k}": sub_v for sub_k, sub_v in item.items()}
+        for k, v in items[0].items()
+        for item in items
+    ] if items else []
 
 def get_instance_configuration(rds_client, db_instance):
     try:
