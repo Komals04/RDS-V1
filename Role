@@ -9,14 +9,8 @@ def extract_core_count(processor_features):
             return feature.get('Value', 'Not Configured')
     return 'Not Configured'
 
-def flatten_nested_attributes(attributes_list):
-    flat_attributes = {}
-    for idx, attribute in enumerate(attributes_list):
-        if isinstance(attribute, dict):
-            flat_attributes.update(attribute)
-        else:
-            flat_attributes[f'UnexpectedData_{idx + 1}'] = str(attribute)
-    return flat_attributes
+def flatten_nested_attributes(items):
+    return ', '.join([f"{k}: {v}" for item in items for k, v in item.items()])
 
 def get_instance_configuration(rds_client, db_instance):
     try:
@@ -25,7 +19,7 @@ def get_instance_configuration(rds_client, db_instance):
 
         processor_features = instance.get('ProcessorFeatures', [])
         core_count = extract_core_count(processor_features)
-        
+
         # Fetch vCPU information
         vcpu = instance.get('vCPU', 'Not Configured')
 
@@ -126,36 +120,12 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
             # Add more attributes from the describe_db_clusters response as needed
 
-            'DBClusterMembers': [
-                {
-                    'DBInstanceIdentifier': member['DBInstanceIdentifier'],
-                    'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
-                    'DBClusterParameterGroupStatus': member.get('DBClusterParameterGroupStatus', 'Not Configured'),
-                    'PromotionTier': member.get('PromotionTier', 'Not Configured')
-                } for member in db_cluster.get('DBClusterMembers', [])
-            ],
-
-            'VpcSecurityGroups': [
-                {
-                    'VpcSecurityGroupId': group['VpcSecurityGroupId'],
-                    'Status': group.get('Status', 'Not Configured')
-                } for group in db_cluster.get('VpcSecurityGroups', [])
-            ],
-
-            'AssociatedRoles': [
-                {
-                    'RoleArn': role['RoleArn'],
-                    'Status': role.get('Status', 'Not Configured'),
-                    'FeatureName': role.get('FeatureName', 'Not Configured')
-                } for role in db_cluster.get('AssociatedRoles', [])
-            ],
-
+            'DBClusterMembers': flatten_nested_attributes(db_cluster.get('DBClusterMembers', [])),
+            'VpcSecurityGroups': flatten_nested_attributes(db_cluster.get('VpcSecurityGroups', [])),
+            'AssociatedRoles': flatten_nested_attributes(db_cluster.get('AssociatedRoles', [])),
             'DomainMemberships': db_cluster.get('DomainMemberships', []),
-
             'TagList': db_cluster.get('TagList', []),
-
             'ScalingConfigurationInfo': db_cluster.get('ScalingConfigurationInfo', {}),
-
             # ... (more attributes)
 
         }
@@ -185,14 +155,7 @@ def main():
 
             # Add more attributes from describe_db_clusters response as needed
 
-            'DBClusterMembers_DBInstanceIdentifier', 'DBClusterMembers_IsClusterWriter',
-            'DBClusterMembers_DBClusterParameterGroupStatus', 'DBClusterMembers_PromotionTier',
-            
-            'VpcSecurityGroups_VpcSecurityGroupId', 'VpcSecurityGroups_Status',
-
-            'AssociatedRoles_RoleArn', 'AssociatedRoles_Status', 'AssociatedRoles_FeatureName',
-
-            'DomainMemberships', 'TagList', 'ScalingConfigurationInfo',
+            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'TagList', 'ScalingConfigurationInfo',
 
             # ... (more attributes)
 
@@ -214,22 +177,12 @@ def main():
                 for instance in instances:
                     insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
                     if insights:
-                        # Flatten nested attributes
-                        insights['DBClusterMembers'] = flatten_nested_attributes(insights.get('DBClusterMembers', []))
-                        insights['VpcSecurityGroups'] = flatten_nested_attributes(insights.get('VpcSecurityGroups', []))
-                        insights['AssociatedRoles'] = flatten_nested_attributes(insights.get('AssociatedRoles', []))
-                        
                         writer.writerow(insights)
                         print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
                 for cluster in clusters:
                     cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
                     if cluster_info:
-                        # Flatten nested attributes
-                        cluster_info['DBClusterMembers'] = flatten_nested_attributes(cluster_info.get('DBClusterMembers', []))
-                        cluster_info['VpcSecurityGroups'] = flatten_nested_attributes(cluster_info.get('VpcSecurityGroups', []))
-                        cluster_info['AssociatedRoles'] = flatten_nested_attributes(cluster_info.get('AssociatedRoles', []))
-                        
                         writer.writerow(cluster_info)
                         print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
