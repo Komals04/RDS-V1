@@ -9,6 +9,15 @@ def extract_core_count(processor_features):
             return feature.get('Value', 'Not Configured')
     return 'Not Configured'
 
+def flatten_dict(d):
+    flattened = {}
+    for key, value in d.items():
+        if isinstance(value, dict):
+            flattened.update(flatten_dict({f"{key}_{k}": v for k, v in value.items()}))
+        else:
+            flattened[key] = value
+    return flattened
+
 def get_instance_configuration(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -42,62 +51,40 @@ def get_instance_configuration(rds_client, db_instance):
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
             instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
 
-        return instance_configuration
+        return flatten_dict(instance_configuration)
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
 
-def get_role_information(rds_client, db_instance):
-    try:
-        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
-        instance = response['DBInstances'][0]
+def flatten_cluster_member(member):
+    return {
+        'DBInstanceIdentifier': member['DBInstanceIdentifier'],
+        'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
+        'DBClusterParameterGroupStatus': member.get('DBClusterParameterGroupStatus', 'Not Configured'),
+        'PromotionTier': member.get('PromotionTier', 'Not Configured')
+    }
 
-        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
-        db_cluster_role = instance.get('DBClusterRole', None)
+def flatten_vpc_security_group(group):
+    return {
+        'VpcSecurityGroupId': group['VpcSecurityGroupId'],
+        'Status': group.get('Status', 'Not Configured')
+    }
 
-        if global_cluster_identifier:
-            if db_cluster_role == 'WRITER':
-                return 'Writer Instance'
-            elif db_cluster_role == 'READER':
-                return 'Reader Instance'
-            else:
-                return 'Role not determined'
-        else:
-            return 'Standalone Instance'
-    except ClientError as e:
-        print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
-        return None
+def flatten_associated_role(role):
+    return {
+        'RoleArn': role['RoleArn'],
+        'Status': role.get('Status', 'Not Configured'),
+        'FeatureName': role.get('FeatureName', 'Not Configured')
+    }
 
-def get_rds_insights(rds_client, db_instance):
-    try:
-        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
-        instance = response['DBInstances'][0]
+def flatten_domain_membership(domain_membership):
+    return domain_membership
 
-        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+def flatten_tag_list(tag_list):
+    return tag_list
 
-        role_info = get_role_information(rds_client, db_instance)
-
-        insights = {
-            'DBIdentifier': instance['DBInstanceIdentifier'],
-            'Status': instance['DBInstanceStatus'],
-            'Role': role_info,
-            'Engine': instance['Engine'],
-            'Region': rds_client.meta.region_name,
-            'Size': instance['DBInstanceClass'],
-            'CPU': instance['AllocatedStorage'],
-            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
-            'StorageType': instance.get('StorageType', 'Not Configured'),
-            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
-            'GlobalCluster': global_cluster_identifier,
-        }
-
-        instance_configuration = get_instance_configuration(rds_client, db_instance)
-        insights.update(instance_configuration)
-
-        return insights
-    except ClientError as e:
-        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
-        return None
+def flatten_scaling_configuration_info(scaling_info):
+    return scaling_info
 
 def get_db_cluster_info(rds_client, db_cluster_identifier):
     try:
@@ -115,43 +102,18 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
             'CharacterSetName': db_cluster.get('CharacterSetName', 'Not Configured'),
             'DatabaseName': db_cluster.get('DatabaseName', 'Not Configured'),
 
-            # Add more attributes from the describe_db_clusters response as needed
+            'DBClusterMembers': [flatten_cluster_member(member) for member in db_cluster.get('DBClusterMembers', [])],
+            'VpcSecurityGroups': [flatten_vpc_security_group(group) for group in db_cluster.get('VpcSecurityGroups', [])],
+            'AssociatedRoles': [flatten_associated_role(role) for role in db_cluster.get('AssociatedRoles', [])],
+            'DomainMemberships': [flatten_domain_membership(domain_membership) for domain_membership in db_cluster.get('DomainMemberships', [])],
+            'TagList': flatten_tag_list(db_cluster.get('TagList', [])),
+            'ScalingConfigurationInfo': flatten_scaling_configuration_info(db_cluster.get('ScalingConfigurationInfo', {})),
 
-            'DBClusterMembers': [
-                {
-                    'DBInstanceIdentifier': member['DBInstanceIdentifier'],
-                    'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
-                    'DBClusterParameterGroupStatus': member.get('DBClusterParameterGroupStatus', 'Not Configured'),
-                    'PromotionTier': member.get('PromotionTier', 'Not Configured')
-                } for member in db_cluster.get('DBClusterMembers', [])
-            ],
-
-            'VpcSecurityGroups': [
-                {
-                    'VpcSecurityGroupId': group['VpcSecurityGroupId'],
-                    'Status': group.get('Status', 'Not Configured')
-                } for group in db_cluster.get('VpcSecurityGroups', [])
-            ],
-
-            'AssociatedRoles': [
-                {
-                    'RoleArn': role['RoleArn'],
-                    'Status': role.get('Status', 'Not Configured'),
-                    'FeatureName': role.get('FeatureName', 'Not Configured')
-                } for role in db_cluster.get('AssociatedRoles', [])
-            ],
-
-            'DomainMemberships': db_cluster.get('DomainMemberships', []),
-
-            'TagList': db_cluster.get('TagList', []),
-
-            'ScalingConfigurationInfo': db_cluster.get('ScalingConfigurationInfo', {}),
-
-            # ... (more attributes)
+            # Add more attributes from describe_db_clusters response as needed
 
         }
 
-        return cluster_info
+        return flatten_dict(cluster_info)
     except ClientError as e:
         print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
         return None
@@ -176,7 +138,12 @@ def main():
 
             # Add more attributes from describe_db_clusters response as needed
 
-            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'TagList', 'ScalingConfigurationInfo',
+            'DBClusterMembers_DBInstanceIdentifier', 'DBClusterMembers_IsClusterWriter', 'DBClusterMembers_DBClusterParameterGroupStatus', 'DBClusterMembers_PromotionTier',
+            'VpcSecurityGroups_VpcSecurityGroupId', 'VpcSecurityGroups_Status',
+            'AssociatedRoles_RoleArn', 'AssociatedRoles_Status', 'AssociatedRoles_FeatureName',
+            'DomainMemberships_Domain', 'DomainMemberships_Status', 'DomainMemberships_FQDN', 'DomainMemberships_IAMRoleName', 'DomainMemberships_OU', 'DomainMemberships_AuthSecretArn', 'DomainMemberships_DnsIps',
+            'TagList_Key', 'TagList_Value',
+            'ScalingConfigurationInfo_MinCapacity', 'ScalingConfigurationInfo_MaxCapacity', 'ScalingConfigurationInfo_AutoPause', 'ScalingConfigurationInfo_SecondsUntilAutoPause', 'ScalingConfigurationInfo_TimeoutAction', 'ScalingConfigurationInfo_SecondsBeforeTimeout',
 
             # ... (more attributes)
 
@@ -213,9 +180,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-[{'DBInstanceIdentifier': 'packse00p', 'IsClusterWriter': False, 'DBClusterParameterGroupStatus': 'in-sync', 'PromotionTier': 1}, {'DBInstanceIdentifier': 'packse00r00', 'IsClusterWriter': True, 'DBClusterParameterGroupStatus': 'in-sync', 'PromotionTier': 1}]
