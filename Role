@@ -213,3 +213,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+[{'DBInstanceIdentifier': 'packse00p', 'IsClusterWriter': False, 'DBClusterParameterGroupStatus': 'in-sync', 'PromotionTier': 1}, {'DBInstanceIdentifier': 'packse00r00', 'IsClusterWriter': True, 'DBClusterParameterGroupStatus': 'in-sync', 'PromotionTier': 1}]
