@@ -11,8 +11,11 @@ def extract_core_count(processor_features):
 
 def flatten_nested_attributes(attributes_list):
     flat_attributes = {}
-    for attribute in attributes_list:
-        flat_attributes.update(attribute)
+    for idx, attribute in enumerate(attributes_list):
+        if isinstance(attribute, dict):
+            flat_attributes.update(attribute)
+        else:
+            flat_attributes[f'UnexpectedData_{idx + 1}'] = str(attribute)
     return flat_attributes
 
 def get_instance_configuration(rds_client, db_instance):
