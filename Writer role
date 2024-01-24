@@ -131,6 +131,11 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
         response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
         db_cluster = response['DBClusters'][0]
 
+        # Fetch ServerlessV2ScalingConfiguration attributes
+        scaling_configuration = db_cluster.get('ScalingConfigurationInfo', {})
+        min_capacity = scaling_configuration.get('MinCapacity', 'Not Configured')
+        max_capacity = scaling_configuration.get('MaxCapacity', 'Not Configured')
+
         cluster_info = {
             'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
             'ClusterStatus': db_cluster['Status'],
@@ -168,7 +173,11 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
             'Tags': flatten_tags(db_cluster.get('TagList', [])),  # Include flattened tags for clusters
 
-            'ScalingConfigurationInfo': db_cluster.get('ScalingConfigurationInfo', {}),
+            'ScalingConfigurationInfo': {
+                'MinCapacity': min_capacity,
+                'MaxCapacity': max_capacity,
+            },
+
             # ... (more attributes)
         }
 
