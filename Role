@@ -172,9 +172,10 @@ def main():
         regions = ['us-east-1', 'us-east-2']  # Hardcoded regions
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename = f'rds_insights_combined_{timestamp}.csv'  # Single CSV file for both regions
+        instance_filename = f'rds_insights_instances_{timestamp}.csv'  # CSV file for RDS instances
+        cluster_filename = f'rds_insights_clusters_{timestamp}.csv'  # CSV file for RDS clusters
 
-        fieldnames = [
+        instance_fieldnames = [
             'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU', 'vCPU',
             'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
             'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
@@ -182,43 +183,47 @@ def main():
             'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
             'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
             'ReadReplicaDBClusterIdentifiers', 'ProcessorFeatures', 'CoreCount',
-            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
-            'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
-
-            # Add more attributes from describe_db_clusters response as needed
-
-            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags', 'ScalingConfigurationInfo',
-
+            'Tags',  # Added Tags for instances
             # ... (more attributes)
-
         ]
 
-        with open(filename, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+        cluster_fieldnames = [
+            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
+            'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
+            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags', 'ScalingConfigurationInfo',
+            # ... (more attributes)
+        ]
 
-            for region in regions:
-                rds_client = boto3.client('rds', region_name=region)
-                
-                response_instances = rds_client.describe_db_instances()
-                instances = response_instances['DBInstances']
+        with open(instance_filename, 'w', newline='') as instance_csvfile:
+            instance_writer = csv.DictWriter(instance_csvfile, fieldnames=instance_fieldnames)
+            instance_writer.writeheader()
 
-                response_clusters = rds_client.describe_db_clusters()
-                clusters = response_clusters['DBClusters']
+            with open(cluster_filename, 'w', newline='') as cluster_csvfile:
+                cluster_writer = csv.DictWriter(cluster_csvfile, fieldnames=cluster_fieldnames)
+                cluster_writer.writeheader()
 
-                for instance in instances:
-                    insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
-                    if insights:
-                        writer.writerow(insights)
-                        print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
+                for region in regions:
+                    rds_client = boto3.client('rds', region_name=region)
+                    
+                    response_instances = rds_client.describe_db_instances()
+                    instances = response_instances['DBInstances']
 
-                for cluster in clusters:
-                    cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
-                    if cluster_info:
-                        writer.writerow(cluster_info)
-                        print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
+                    response_clusters = rds_client.describe_db_clusters()
+                    clusters = response_clusters['DBClusters']
 
-            print(f'Completed checking and exporting RDS insights to {filename} for both regions.')
+                    for instance in instances:
+                        insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
+                        if insights:
+                            instance_writer.writerow(insights)
+                            print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
+
+                    for cluster in clusters:
+                        cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
+                        if cluster_info:
+                            cluster_writer.writerow(cluster_info)
+                            print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
+
+                print(f'Completed checking and exporting RDS insights to {instance_filename} and {cluster_filename} for both regions.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
