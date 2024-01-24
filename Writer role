@@ -46,6 +46,8 @@ def get_instance_configuration(rds_client, db_instance):
             'CPU': instance['AllocatedStorage'],
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('StorageType', 'Not Configured'),  # Added NetworkType
+            'StorageThroughput': instance.get('Throughput', 'Not Configured'),  # Added StorageThroughput
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
             'GlobalCluster': instance.get('GlobalClusterIdentifier', None),
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
@@ -114,6 +116,8 @@ def get_rds_insights(rds_client, db_instance):
             'CPU': instance['AllocatedStorage'],
             'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
             'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('StorageType', 'Not Configured'),  # Added NetworkType
+            'StorageThroughput': instance.get('Throughput', 'Not Configured'),  # Added StorageThroughput
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
             'GlobalCluster': global_cluster_identifier,
         }
@@ -196,7 +200,8 @@ def main():
 
         instance_fieldnames = [
             'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU', 'vCPU',
-            'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
+            'ProvisionedIOPS', 'StorageType', 'NetworkType', 'StorageThroughput',  # Added NetworkType and StorageThroughput
+            'Multi-AZ', 'GlobalCluster',
             'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
             'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
             'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
