@@ -9,13 +9,6 @@ def extract_core_count(processor_features):
             return feature.get('Value', 'Not Configured')
     return 'Not Configured'
 
-def flatten_nested_attributes(items):
-    return [
-        {f"{k}_{sub_k}": sub_v for sub_k, sub_v in item.items()}
-        for k, v in items[0].items()
-        for item in items
-    ] if items else []
-
 def get_instance_configuration(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -23,7 +16,7 @@ def get_instance_configuration(rds_client, db_instance):
 
         processor_features = instance.get('ProcessorFeatures', [])
         core_count = extract_core_count(processor_features)
-
+        
         # Fetch vCPU information
         vcpu = instance.get('vCPU', 'Not Configured')
 
@@ -75,33 +68,6 @@ def get_role_information(rds_client, db_instance):
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
 
-def flatten_db_cluster_members(db_cluster_members):
-    return [
-        {
-            'DBClusterIdentifier': member['DBClusterIdentifier'],
-            'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
-            'DBClusterParameterGroupStatus': member.get('DBClusterParameterGroupStatus', 'Not Configured'),
-            'PromotionTier': member.get('PromotionTier', 'Not Configured')
-        } for member in db_cluster_members
-    ]
-
-def flatten_vpc_security_groups(vpc_security_groups):
-    return [
-        {
-            'VpcSecurityGroupId': group['VpcSecurityGroupId'],
-            'Status': group.get('Status', 'Not Configured')
-        } for group in vpc_security_groups
-    ]
-
-def flatten_associated_roles(associated_roles):
-    return [
-        {
-            'RoleArn': role['RoleArn'],
-            'Status': role.get('Status', 'Not Configured'),
-            'FeatureName': role.get('FeatureName', 'Not Configured')
-        } for role in associated_roles
-    ]
-
 def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -139,7 +105,7 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
         db_cluster = response['DBClusters'][0]
 
         cluster_info = {
-            'DBClusterIdentifier': db_cluster.get('DBClusterIdentifier', 'Not Configured'),
+            'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
             'ClusterStatus': db_cluster['Status'],
             'ClusterEngine': db_cluster['Engine'],
             'ClusterRegion': rds_client.meta.region_name,
@@ -151,12 +117,36 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
             # Add more attributes from the describe_db_clusters response as needed
 
-            'DBClusterMembers': flatten_db_cluster_members(db_cluster.get('DBClusterMembers', [])),
-            'VpcSecurityGroups': flatten_vpc_security_groups(db_cluster.get('VpcSecurityGroups', [])),
-            'AssociatedRoles': flatten_associated_roles(db_cluster.get('AssociatedRoles', [])),
+            'DBClusterMembers': [
+                {
+                    'DBInstanceIdentifier': member['DBInstanceIdentifier'],
+                    'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
+                    'DBClusterParameterGroupStatus': member.get('DBClusterParameterGroupStatus', 'Not Configured'),
+                    'PromotionTier': member.get('PromotionTier', 'Not Configured')
+                } for member in db_cluster.get('DBClusterMembers', [])
+            ],
+
+            'VpcSecurityGroups': [
+                {
+                    'VpcSecurityGroupId': group['VpcSecurityGroupId'],
+                    'Status': group.get('Status', 'Not Configured')
+                } for group in db_cluster.get('VpcSecurityGroups', [])
+            ],
+
+            'AssociatedRoles': [
+                {
+                    'RoleArn': role['RoleArn'],
+                    'Status': role.get('Status', 'Not Configured'),
+                    'FeatureName': role.get('FeatureName', 'Not Configured')
+                } for role in db_cluster.get('AssociatedRoles', [])
+            ],
+
             'DomainMemberships': db_cluster.get('DomainMemberships', []),
+
             'TagList': db_cluster.get('TagList', []),
+
             'ScalingConfigurationInfo': db_cluster.get('ScalingConfigurationInfo', {}),
+
             # ... (more attributes)
 
         }
