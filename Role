@@ -42,6 +42,10 @@ def get_instance_configuration(rds_client, db_instance):
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
             instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
 
+        # Fetch and add tags
+        tags = rds_client.list_tags_for_resource(ResourceName=instance['DBInstanceArn'])
+        instance_configuration['Tags'] = tags.get('TagList', [])
+
         return instance_configuration
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
