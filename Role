@@ -10,7 +10,9 @@ def extract_core_count(processor_features):
     return 'Not Configured'
 
 def flatten_tags(tag_list):
-    return {tag['Key']: tag['Value'] for tag in tag_list}
+    logical_id_tag = next((tag for tag in tag_list if tag['Key'] == 'aws:cloudformation:logical-id'), None)
+    logical_id = logical_id_tag['Value'] if logical_id_tag else 'Not Configured'
+    return {'LogicalId': logical_id}
 
 def flatten_nested_attributes(items):
     return [
@@ -26,9 +28,13 @@ def get_instance_configuration(rds_client, db_instance):
 
         processor_features = instance.get('ProcessorFeatures', [])
         core_count = extract_core_count(processor_features)
-        
+
         # Fetch vCPU information
         vcpu = instance.get('vCPU', 'Not Configured')
+
+        # Extracting the specific tag key "aws:cloudformation:logical-id"
+        tags = instance.get('TagList', [])
+        flattened_tags = flatten_tags(tags)
 
         instance_configuration = {
             'DBIdentifier': instance['DBInstanceIdentifier'],
@@ -58,7 +64,8 @@ def get_instance_configuration(rds_client, db_instance):
             'ProcessorFeatures': processor_features,
             'CoreCount': core_count,
             'vCPU': vcpu,
-            'Tags': flatten_tags(instance.get('TagList', [])),
+            **flattened_tags,  # Include flattened tags for instances
+            # ... (more attributes)
         }
 
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
@@ -92,45 +99,29 @@ def get_role_information(rds_client, db_instance):
 
 def get_rds_insights(rds_client, db_instance):
     try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': get_role_information(rds_client, db_instance),
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance['AllocatedStorage'],
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'GlobalCluster': global_cluster_identifier,
+        }
+
         instance_configuration = get_instance_configuration(rds_client, db_instance)
+        insights.update(instance_configuration)
 
-        if instance_configuration:
-            role_info = get_role_information(rds_client, db_instance)
-
-            insights = {
-                'DBIdentifier': instance_configuration['DBIdentifier'],
-                'Status': instance_configuration['Status'],
-                'Role': role_info,
-                'Engine': instance_configuration['Engine'],
-                'Region': instance_configuration['Region'],
-                'Size': instance_configuration['Size'],
-                'CPU': instance_configuration['CPU'],
-                'ProvisionedIOPS': instance_configuration['ProvisionedIOPS'],
-                'StorageType': instance_configuration['StorageType'],
-                'Multi-AZ': instance_configuration['Multi-AZ'],
-                'GlobalCluster': instance_configuration['GlobalCluster'],
-                'InstanceType': instance_configuration['InstanceType'],
-                'PerformanceInsightsEnabled': instance_configuration['PerformanceInsightsEnabled'],
-                'PerformanceInsightsKMSKeyId': instance_configuration['PerformanceInsightsKMSKeyId'],
-                'PerformanceInsightsRetentionPeriod': instance_configuration['PerformanceInsightsRetentionPeriod'],
-                'ServerlessV2ScalingConfiguration': instance_configuration['ServerlessV2ScalingConfiguration'],
-                'AvailabilityZone': instance_configuration['AvailabilityZone'],
-                'PreferredMaintenanceWindow': instance_configuration['PreferredMaintenanceWindow'],
-                'BackupRetentionPeriod': instance_configuration['BackupRetentionPeriod'],
-                'MultiAZ': instance_configuration['MultiAZ'],
-                'PubliclyAccessible': instance_configuration['PubliclyAccessible'],
-                'VpcSecurityGroups': instance_configuration['VpcSecurityGroups'],
-                'DBSubnetGroupName': instance_configuration['DBSubnetGroupName'],
-                'ReadReplicaDBClusterIdentifiers': instance_configuration['ReadReplicaDBClusterIdentifiers'],
-                'ProcessorFeatures': instance_configuration['ProcessorFeatures'],
-                'CoreCount': instance_configuration['CoreCount'],
-                'vCPU': instance_configuration['vCPU'],
-                'MaximumCapacity': instance_configuration.get('MaximumCapacity', 'Not Configured'),
-                'Tags': instance_configuration['Tags'],
-            }
-
-            return insights
-
+        return insights
     except ClientError as e:
         print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
         return None
@@ -139,6 +130,10 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
     try:
         response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
         db_cluster = response['DBClusters'][0]
+
+        # Extracting the specific tag key "aws:cloudformation:logical-id"
+        tags = db_cluster.get('TagList', [])
+        flattened_tags = flatten_tags(tags)
 
         cluster_info = {
             'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
@@ -150,15 +145,8 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
             'BackupRetentionPeriod': db_cluster.get('BackupRetentionPeriod', 'Not Configured'),
             'CharacterSetName': db_cluster.get('CharacterSetName', 'Not Configured'),
             'DatabaseName': db_cluster.get('DatabaseName', 'Not Configured'),
-
-            # Add more attributes from the describe_db_clusters response as needed
-
-            'DBClusterMembers': flatten_nested_attributes(db_cluster.get('DBClusterMembers', [])),
-            'VpcSecurityGroups': flatten_nested_attributes(db_cluster.get('VpcSecurityGroups', [])),
-            'AssociatedRoles': flatten_nested_attributes(db_cluster.get('AssociatedRoles', [])),
-            'DomainMemberships': flatten_nested_attributes(db_cluster.get('DomainMemberships', [])),
-            'Tags': flatten_tags(db_cluster.get('TagList', [])),
-            'ScalingConfigurationInfo': db_cluster.get('ScalingConfigurationInfo', {}),
+            'Tags': flattened_tags,  # Flatten tags for clusters
+            # ... (more attributes)
         }
 
         return cluster_info
@@ -182,14 +170,14 @@ def main():
             'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
             'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
             'ReadReplicaDBClusterIdentifiers', 'ProcessorFeatures', 'CoreCount',
-            'MaximumCapacity', 'Tags',  # Added Tags for instances
+            'LogicalId',  # Added LogicalId for instances
             # ... (more attributes)
         ]
 
         cluster_fieldnames = [
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
-            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags', 'ScalingConfigurationInfo',
+            'Tags',  # Flatten tags for clusters
             # ... (more attributes)
         ]
 
@@ -203,7 +191,7 @@ def main():
 
                 for region in regions:
                     rds_client = boto3.client('rds', region_name=region)
-                    
+
                     response_instances = rds_client.describe_db_instances()
                     instances = response_instances['DBInstances']
 
