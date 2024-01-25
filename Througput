@@ -9,21 +9,50 @@ def extract_core_count(processor_features):
             return feature.get('Value', 'Not Configured')
     return 'Not Configured'
 
-def get_instance_configuration(rds_client, db_instance):
+def flatten_tags(tag_list):
+    logical_id_tag = next((tag for tag in tag_list if tag['Key'] == 'aws:cloudformation:logical-id'), None)
+    logical_id = logical_id_tag['Value'] if logical_id_tag else 'Not Configured'
+    return {'LogicalId': logical_id}
+
+def flatten_nested_attributes(items):
+    return [
+        {f"{k}_{sub_k}": sub_v for sub_k, sub_v in item.items()}
+        for k, v in items[0].items()
+        for item in items
+    ] if items else []
+
+def get_instance_configuration(rds_client, db_instance, account_id, account_name):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
         instance = response['DBInstances'][0]
 
         processor_features = instance.get('ProcessorFeatures', [])
         core_count = extract_core_count(processor_features)
-        
+
         # Fetch vCPU information
-        vcpu = instance.get('vCPU', 'Not Configured')
+        # vcpu = instance.get('vCPU', 'Not Configured')  # Remove vCPU
+
+        # Extracting the specific tag key "aws:cloudformation:logical-id"
+        tags = instance.get('TagList', [])
+        flattened_tags = flatten_tags(tags)
 
         instance_configuration = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Role': get_role_information(rds_client, db_instance),
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'Size': instance['DBInstanceClass'],
+            'CPU': instance['AllocatedStorage'],
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('StorageType', 'Not Configured'),  # Added NetworkType
+            # 'StorageThroughput': instance.get('Throughput', 'Not Configured'),  # Remove StorageThroughput
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'GlobalCluster': instance.get('GlobalClusterIdentifier', None),
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
             'PerformanceInsightsEnabled': instance.get('PerformanceInsights', {}).get('Enabled', 'Not Configured'),
-            'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),
+            # 'PerformanceInsightsKMSKeyId': instance.get('PerformanceInsights', {}).get('KMSKeyId', 'Not Configured'),  # Remove PerformanceInsightsKMSKeyId
             'PerformanceInsightsRetentionPeriod': instance.get('PerformanceInsights', {}).get('RetentionPeriod', 'Not Configured'),
             'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
             'AvailabilityZone': instance.get('AvailabilityZone', 'Not Configured'),
@@ -36,7 +65,11 @@ def get_instance_configuration(rds_client, db_instance):
             'ReadReplicaDBClusterIdentifiers': instance.get('ReadReplicaDBClusterIdentifiers', []),
             'ProcessorFeatures': processor_features,
             'CoreCount': core_count,
-            'vCPU': vcpu,  # Added vCPU to instance_configuration
+            # 'vCPU': vcpu,  # Remove vCPU
+            'AccountId': account_id,  # Add AccountId
+            'AccountName': account_name,  # Add AccountName
+            **flattened_tags,  # Include flattened tags for instances
+            # ... (more attributes)
         }
 
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
@@ -68,98 +101,32 @@ def get_role_information(rds_client, db_instance):
         print(f"Error retrieving role information for RDS instance {db_instance}: {e}")
         return None
 
-def get_rds_insights(rds_client, db_instance):
-    try:
-        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
-        instance = response['DBInstances'][0]
-
-        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
-
-        role_info = get_role_information(rds_client, db_instance)
-
-        insights = {
-            'DBIdentifier': instance['DBInstanceIdentifier'],
-            'Status': instance['DBInstanceStatus'],
-            'Role': role_info,
-            'Engine': instance['Engine'],
-            'Region': rds_client.meta.region_name,
-            'Size': instance['DBInstanceClass'],
-            'CPU': instance['AllocatedStorage'],
-            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
-            'StorageType': instance.get('StorageType', 'Not Configured'),
-            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
-            'GlobalCluster': global_cluster_identifier,
-        }
-
-        instance_configuration = get_instance_configuration(rds_client, db_instance)
-        insights.update(instance_configuration)
-
-        return insights
-    except ClientError as e:
-        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
-        return None
-
-def get_db_cluster_info(rds_client, db_cluster_identifier):
-    try:
-        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
-        db_cluster = response['DBClusters'][0]
-
-        cluster_info = {
-            'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
-            'ClusterStatus': db_cluster['Status'],
-            'ClusterEngine': db_cluster['Engine'],
-            'ClusterRegion': rds_client.meta.region_name,
-        }
-
-        return cluster_info
-    except ClientError as e:
-        print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
-        return None
+# ... (existing code)
 
 def main():
     try:
         regions = ['us-east-1', 'us-east-2']  # Hardcoded regions
 
+        # Initialize an STS client
+        sts_client = boto3.client('sts')
+
+        # Fetch the account ID and account name
+        account_id = sts_client.get_caller_identity().get('Account')
+        account_name = boto3.client('iam').list_account_aliases()['AccountAliases'][0]
+
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        filename = f'rds_insights_combined_{timestamp}.csv'  # Single CSV file for both regions
+        instance_filename = f'rds_insights_instances_{timestamp}.csv'  # CSV file for RDS instances
+        cluster_filename = f'rds_insights_clusters_{timestamp}.csv'  # CSV file for RDS clusters
 
-        fieldnames = [
-            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'Size', 'CPU', 'vCPU',
-            'ProvisionedIOPS', 'StorageType', 'Multi-AZ', 'GlobalCluster',
-            'InstanceType', 'PerformanceInsightsEnabled', 'PerformanceInsightsKMSKeyId',
-            'PerformanceInsightsRetentionPeriod', 'ServerlessV2ScalingConfiguration',
-            'AvailabilityZone', 'PreferredMaintenanceWindow', 'BackupRetentionPeriod',
-            'MultiAZ', 'PubliclyAccessible', 'VpcSecurityGroups', 'DBSubnetGroupName',
-            'ReadReplicaDBClusterIdentifiers', 'ProcessorFeatures', 'CoreCount',
-            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
-        ]
+        # ... (existing code)
 
-        with open(filename, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+        for instance in instances:
+            insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'], account_id, account_name)
+            if insights:
+                instance_writer.writerow(insights)
+                print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
-            for region in regions:
-                rds_client = boto3.client('rds', region_name=region)
-                
-                response_instances = rds_client.describe_db_instances()
-                instances = response_instances['DBInstances']
-
-                response_clusters = rds_client.describe_db_clusters()
-                clusters = response_clusters['DBClusters']
-
-                for instance in instances:
-                    insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
-                    if insights:
-                        writer.writerow(insights)
-                        print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
-
-                for cluster in clusters:
-                    cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
-                    if cluster_info:
-                        writer.writerow(cluster_info)
-                        print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
-
-            print(f'Completed checking and exporting RDS insights to {filename} for both regions.')
+        # ... (existing code)
     except Exception as e:
         print(f"An error occurred: {e}")
 
