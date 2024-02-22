@@ -1,40 +1,195 @@
 import boto3
 import csv
+from datetime import datetime
+from botocore.exceptions import ClientError
 
-def get_all_rds_instances():
-    rds_client = boto3.client('rds')
-    
-    # Get all RDS instances
-    response = rds_client.describe_db_instances()
+def flatten_tags(tag_list):
+    logical_id_tag = next((tag for tag in tag_list if tag['Key'] == 'aws:cloudformation:logical-id'), None)
+    logical_id = logical_id_tag['Value'] if logical_id_tag else 'Not Configured'
+    return {'LogicalId': logical_id}
 
-    return response['DBInstances']
+def flatten_nested_attributes(items):
+    return [
+        {f"{k}_{sub_k}": sub_v for sub_k, sub_v in item.items()}
+        for k, v in items[0].items()
+        for item in items
+    ] if items else []
 
-def write_to_csv(rds_instances, output_file='rds_instances.csv'):
-    # Define the CSV header
-    field_names = ['DBInstanceIdentifier', 'DBInstanceClass', 'Engine', 'EngineVersion', 'DBInstanceStatus']
+def get_instance_configuration(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
 
-    # Write data to CSV
-    with open(output_file, mode='w', newline='') as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=field_names)
-        
-        # Write header
-        writer.writeheader()
+        # Extracting the specific tag key "aws:cloudformation:logical-id"
+        tags = instance.get('TagList', [])
+        flattened_tags = flatten_tags(tags)
 
-        # Write data rows
-        for instance in rds_instances:
-            writer.writerow({
-                'DBInstanceIdentifier': instance['DBInstanceIdentifier'],
-                'DBInstanceClass': instance['DBInstanceClass'],
-                'Engine': instance['Engine'],
-                'EngineVersion': instance['EngineVersion'],
-                'DBInstanceStatus': instance['DBInstanceStatus']
-            })
+        instance_configuration = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'AllocatedStorage': instance['AllocatedStorage'],
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('NetworkType', 'Not Configured'), 
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
+            'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
+            'PreferredMaintenanceWindow': instance.get('PreferredMaintenanceWindow', 'Not Configured'),
+            'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
+            'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
+            **flattened_tags,  # Include flattened tags for instances
+           }
 
-if __name__ == '__main__':
-    # Fetch all RDS instances
-    rds_instances = get_all_rds_instances()
+        if 'Provisioned IOPS' in instance_configuration['InstanceType']:
+            instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
 
-    # Write data to CSV
-    write_to_csv(rds_instances)
+        return instance_configuration
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return None
 
-    print(f'RDS instances information exported to "rds_instances.csv"')
+
+
+def get_rds_insights(rds_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'AllocatedStorage': instance['AllocatedStorage'],
+            'ProvisionedIOPS': instance.get('Iops', 'Not Configured'),
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('NetworkType', 'Not Configured'),  # Added NetworkType
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+        }
+
+        instance_configuration = get_instance_configuration(rds_client, db_instance)
+        insights.update(instance_configuration)
+
+        return insights
+    except ClientError as e:
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
+
+def get_db_cluster_info(rds_client, db_cluster_identifier):
+    try:
+        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
+        db_cluster = response['DBClusters'][0]
+
+        # Fetch ServerlessV2ScalingConfiguration attributes
+        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
+        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
+
+
+        cluster_info = {
+            'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
+            'ClusterStatus': db_cluster['Status'],
+            'ClusterEngine': db_cluster['Engine'],
+            'ClusterRegion': rds_client.meta.region_name,
+            'AllocatedStorage': db_cluster.get('AllocatedStorage', 'Not Configured'),
+            'AvailabilityZones': db_cluster.get('AvailabilityZones', []),
+            'BackupRetentionPeriod': db_cluster.get('BackupRetentionPeriod', 'Not Configured'),
+            'CharacterSetName': db_cluster.get('CharacterSetName', 'Not Configured'),
+            'DatabaseName': db_cluster.get('DatabaseName', 'Not Configured'),
+
+            'DBClusterMembers': [
+                {
+                    'DBInstanceIdentifier': member['DBInstanceIdentifier'],
+                    'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
+                } for member in db_cluster.get('DBClusterMembers', [])
+            ],
+
+            'VpcSecurityGroups': [
+                {
+                    'VpcSecurityGroupId': group['VpcSecurityGroupId'],
+                    'Status': group.get('Status', 'Not Configured')
+                } for group in db_cluster.get('VpcSecurityGroups', [])
+            ],
+
+            'AssociatedRoles': [
+                {
+                    'RoleArn': role['RoleArn'],
+                    'Status': role.get('Status', 'Not Configured'),
+                    'FeatureName': role.get('FeatureName', 'Not Configured')
+                } for role in db_cluster.get('AssociatedRoles', [])
+            ],
+
+            'DomainMemberships': db_cluster.get('DomainMemberships', []),
+
+            'Tags': flatten_tags(db_cluster.get('TagList', [])),  # Include flattened tags for clusters
+
+            'ScalingConfigurationInfo': {
+                'MinCapacity': min_capacity,
+            },
+        }
+
+        return cluster_info
+    except ClientError as e:
+        print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
+        return None
+
+def main():
+    try:
+        regions = ['us-east-1', 'us-east-2', 'us-west-2']  # Hardcoded regions
+
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        instance_filename = f'rds_insights_instances_{timestamp}.csv'  # CSV file for RDS instances
+        cluster_filename = f'rds_insights_clusters_{timestamp}.csv'  # CSV file for RDS clusters
+
+        instance_fieldnames = [
+            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'AllocatedStorage',
+            'ProvisionedIOPS', 'StorageType', 'NetworkType',  # Added NetworkType 
+            'Multi-AZ',
+            'InstanceType', 'LogicalId',            
+            'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible', 
+        ]
+
+        cluster_fieldnames = [
+            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
+            'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
+            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags', 'ServerlessV2ScalingConfiguration',
+        ]
+
+        with open(instance_filename, 'w', newline='') as instance_csvfile:
+            instance_writer = csv.DictWriter(instance_csvfile, fieldnames=instance_fieldnames)
+            instance_writer.writeheader()
+
+            with open(cluster_filename, 'w', newline='') as cluster_csvfile:
+                cluster_writer = csv.DictWriter(cluster_csvfile, fieldnames=cluster_fieldnames)
+                cluster_writer.writeheader()
+
+                for region in regions:
+                    rds_client = boto3.client('rds', region_name=region)
+
+                    response_instances = rds_client.describe_db_instances()
+                    instances = response_instances['DBInstances']
+
+                    response_clusters = rds_client.describe_db_clusters()
+                    clusters = response_clusters['DBClusters']
+
+                    for instance in instances:
+                        insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
+                        if insights:
+                            instance_writer.writerow(insights)
+                            print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
+
+                    for cluster in clusters:
+                        cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
+                        if cluster_info:
+                            cluster_writer.writerow(cluster_info)
+                            print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
+
+                print(f'Completed checking and exporting RDS insights to {instance_filename} and {cluster_filename} for both regions.')
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
