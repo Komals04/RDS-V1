@@ -35,7 +35,6 @@ def get_instance_configuration(rds_client, db_instance):
             'NetworkType': instance.get('NetworkType', 'Not Configured'), 
             'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
             'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
-            'ServerlessV2ScalingConfiguration': instance.get('ServerlessV2ScalingConfiguration', 'Not Configured'),
             'PreferredMaintenanceWindow': instance.get('PreferredMaintenanceWindow', 'Not Configured'),
             'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
             'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
@@ -82,10 +81,6 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
         response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
         db_cluster = response['DBClusters'][0]
 
-        # Fetch ServerlessV2ScalingConfiguration attributes
-        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
-        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
-
         cluster_info = {
             'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
             'ClusterStatus': db_cluster['Status'],
@@ -123,10 +118,7 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
 
             'Tags': flatten_tags(db_cluster.get('TagList', [])),  # Include flattened tags for clusters
 
-            'ScalingConfigurationInfo': {
-                'MinCapacity': min_capacity,
             },
-        }
 
         return cluster_info
     except ClientError as e:
@@ -152,7 +144,7 @@ def main():
         cluster_fieldnames = [
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
-            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags', 'ServerlessV2ScalingConfiguration',
+            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags',
         ]
 
         with open(instance_filename, 'w', newline='') as instance_csvfile:
