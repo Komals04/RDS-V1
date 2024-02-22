@@ -40,7 +40,7 @@ def get_instance_configuration(rds_client, db_instance):
             'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
             'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
             **flattened_tags,  # Include flattened tags for instances
-           }
+        }
 
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
             instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
@@ -49,8 +49,6 @@ def get_instance_configuration(rds_client, db_instance):
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
-
-
 
 def get_rds_insights(rds_client, db_instance):
     try:
@@ -87,7 +85,6 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
         # Fetch ServerlessV2ScalingConfiguration attributes
         serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
         min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
-
 
         cluster_info = {
             'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
@@ -145,7 +142,7 @@ def main():
         cluster_filename = f'rds_insights_clusters_{timestamp}.csv'  # CSV file for RDS clusters
 
         instance_fieldnames = [
-            'DBIdentifier', 'Status', 'Role', 'Engine', 'Region', 'AllocatedStorage',
+            'DBIdentifier', 'Status', 'Engine', 'Region', 'AllocatedStorage',
             'ProvisionedIOPS', 'StorageType', 'NetworkType',  # Added NetworkType 
             'Multi-AZ',
             'InstanceType', 'LogicalId',            
