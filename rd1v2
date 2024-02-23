@@ -124,7 +124,6 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
             'AllocatedStorage': db_cluster.get('AllocatedStorage', 'Not Configured'),
             'AvailabilityZones': db_cluster.get('AvailabilityZones', []),
             'BackupRetentionPeriod': db_cluster.get('BackupRetentionPeriod', 'Not Configured'),
-            'CharacterSetName': db_cluster.get('CharacterSetName', 'Not Configured'),
             'DatabaseName': db_cluster.get('DatabaseName', 'Not Configured'),
 
             'DBClusterMembers': [
@@ -134,26 +133,8 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
                 } for member in db_cluster.get('DBClusterMembers', [])
             ],
 
-            'VpcSecurityGroups': [
-                {
-                    'VpcSecurityGroupId': group['VpcSecurityGroupId'],
-                    'Status': group.get('Status', 'Not Configured')
-                } for group in db_cluster.get('VpcSecurityGroups', [])
-            ],
+            'MinCapacity': min_capacity,  # Added MinCapacity for Serverless
 
-            'AssociatedRoles': [
-                {
-                    'RoleArn': role['RoleArn'],
-                    'Status': role.get('Status', 'Not Configured'),
-                    'FeatureName': role.get('FeatureName', 'Not Configured')
-                } for role in db_cluster.get('AssociatedRoles', [])
-            ],
-
-            'DomainMemberships': db_cluster.get('DomainMemberships', []),
-
-            'Tags': flatten_tags(db_cluster.get('TagList', [])),  # Include flattened tags for clusters
-
-            'ServerlessV2ScalingConfiguration': get_serverless_capacity(rds_client, db_cluster_identifier),
         }
 
         return cluster_info
@@ -184,16 +165,13 @@ def main():
             'ProvisionedIOPS', 'StorageType', 'NetworkType',
             'Multi-AZ',
             'InstanceType', 'LogicalId',
-            'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible',
-            'MinCapacity',  # Added MinCapacity for Serverless
+            'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible', 'MaximumCapacity',
         ]
 
         cluster_fieldnames = [
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion', 'AccountAlias',
-            'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
-            'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags',
-            'ServerlessV2ScalingConfiguration',  # Added Serverless capacity
-            'MinCapacity',  # Added MinCapacity for Serverless
+            'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'DatabaseName',
+            'DBClusterMembers', 'MinCapacity',  # Removed fields
         ]
 
         with open(instance_filename, 'w', newline='') as instance_csvfile:
@@ -227,7 +205,6 @@ def main():
                         cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
                         if cluster_info:
                             cluster_info['AccountAlias'] = account_alias
-                            cluster_info['MinCapacity'] = cluster_info['ServerlessV2ScalingConfiguration']['MinCapacity']
                             cluster_writer.writerow(cluster_info)
                             print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
