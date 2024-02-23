@@ -26,8 +26,8 @@ def get_instance_configuration(rds_client, db_instance):
 
         # Extracting additional tags 'SupportEmail', 'SysLevel', and 'Application'
         support_email_tag = next((tag for tag in tags if tag['Key'] == 'SupportEmail'), None)
-        sys_level_tag = next((tag for tags in tags if tag['Key'] == 'SysLevel'), None)
-        application_tag = next((tag for tags in tags if tag['Key'] == 'Application'), None)
+        sys_level_tag = next((tag for tag in tags if tag['Key'] == 'SysLevel'), None)
+        application_tag = next((tag for tag in tags if tag['Key'] == 'Application'), None)
 
         support_email = support_email_tag['Value'] if support_email_tag else 'Not Configured'
         sys_level = sys_level_tag['Value'] if sys_level_tag else 'Not Configured'
