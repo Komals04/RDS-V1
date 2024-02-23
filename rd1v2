@@ -53,35 +53,12 @@ def get_instance_configuration(rds_client, db_instance):
             **flattened_tags,  # Include flattened tags for instances
         }
 
-        # Fetch MinCapacity from ServerlessV2ScalingConfiguration
-        serverless_v2_scaling_configuration = instance.get('ServerlessV2ScalingConfiguration', {})
-        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
-        instance_configuration['MinCapacity'] = min_capacity
-
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
             instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
 
         return instance_configuration
     except ClientError as e:
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
-        return None
-
-def get_serverless_capacity(rds_client, db_cluster_identifier):
-    try:
-        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
-        db_cluster = response['DBClusters'][0]
-
-        # Fetch ServerlessV2ScalingConfiguration attributes
-        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
-        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
-        max_capacity = serverless_v2_scaling_configuration.get('MaxCapacity', 'Not Configured')
-
-        return {
-            'MinCapacity': min_capacity,
-            'MaxCapacity': max_capacity,
-        }
-    except ClientError as e:
-        print(f"Error retrieving Serverless capacity for RDS cluster {db_cluster_identifier}: {e}")
         return None
 
 def get_rds_insights(rds_client, db_instance):
@@ -152,14 +129,21 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
             'DomainMemberships': db_cluster.get('DomainMemberships', []),
 
             'Tags': flatten_tags(db_cluster.get('TagList', [])),  # Include flattened tags for clusters
-
-            'ServerlessV2ScalingConfiguration': get_serverless_capacity(rds_client, db_cluster_identifier),
         }
 
         return cluster_info
     except ClientError as e:
         print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
         return None
+
+def get_account_alias(iam_client):
+    try:
+        response = iam_client.list_account_aliases()
+        aliases = response['AccountAliases']
+        return aliases[0] if aliases else 'No Alias'
+    except ClientError as e:
+        print(f"Error retrieving account alias: {e}")
+        return 'No Alias'
 
 def main():
     try:
@@ -171,19 +155,17 @@ def main():
 
         instance_fieldnames = [
             'DBIdentifier', 'Status', 'Engine', 'Region', 'AllocatedStorage',
-            'ProvisionedIOPS', 'StorageType', 'NetworkType',  # Added NetworkType 
+            'SysLevel', 'Application', 'AccountAlias', 'SupportEmail',
+            'ProvisionedIOPS', 'StorageType', 'NetworkType',
             'Multi-AZ',
             'InstanceType', 'LogicalId',
             'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible',
-            'SupportEmail', 'SysLevel', 'Application',  # Added columns
-            'MinCapacity',  # Added MinCapacity for Serverless
         ]
 
         cluster_fieldnames = [
-            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
+            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion', 'AccountAlias',
             'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
             'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags',
-            'ServerlessV2ScalingConfiguration',  # Added Serverless capacity
         ]
 
         with open(instance_filename, 'w', newline='') as instance_csvfile:
@@ -196,6 +178,7 @@ def main():
 
                 for region in regions:
                     rds_client = boto3.client('rds', region_name=region)
+                    iam_client = boto3.client('iam', region_name=region)
 
                     response_instances = rds_client.describe_db_instances()
                     instances = response_instances['DBInstances']
@@ -203,15 +186,19 @@ def main():
                     response_clusters = rds_client.describe_db_clusters()
                     clusters = response_clusters['DBClusters']
 
+                    account_alias = get_account_alias(iam_client)
+
                     for instance in instances:
                         insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
                         if insights:
+                            insights['AccountAlias'] = account_alias
                             instance_writer.writerow(insights)
                             print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
                     for cluster in clusters:
                         cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
                         if cluster_info:
+                            cluster_info['AccountAlias'] = account_alias
                             cluster_writer.writerow(cluster_info)
                             print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
