@@ -61,6 +61,24 @@ def get_instance_configuration(rds_client, db_instance):
         print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
         return None
 
+def get_serverless_capacity(rds_client, db_cluster_identifier):
+    try:
+        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
+        db_cluster = response['DBClusters'][0]
+
+        # Fetch ServerlessV2ScalingConfiguration attributes
+        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
+        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
+        max_capacity = serverless_v2_scaling_configuration.get('MaxCapacity', 'Not Configured')
+
+        return {
+            'MinCapacity': min_capacity,
+            'MaxCapacity': max_capacity,
+        }
+    except ClientError as e:
+        print(f"Error retrieving Serverless capacity for RDS cluster {db_cluster_identifier}: {e}")
+        return None
+
 def get_rds_insights(rds_client, db_instance):
     try:
         response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
@@ -129,30 +147,13 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
             'DomainMemberships': db_cluster.get('DomainMemberships', []),
 
             'Tags': flatten_tags(db_cluster.get('TagList', [])),  # Include flattened tags for clusters
-            'ServerlessCapacity': get_serverless_capacity(rds_client, db_cluster_identifier),
+
+            'ServerlessV2ScalingConfiguration': get_serverless_capacity(rds_client, db_cluster_identifier),
         }
 
         return cluster_info
     except ClientError as e:
         print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
-        return None
-
-def get_serverless_capacity(rds_client, db_cluster_identifier):
-    try:
-        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
-        db_cluster = response['DBClusters'][0]
-
-        # Fetch ServerlessV2ScalingConfiguration attributes
-        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
-        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
-        max_capacity = serverless_v2_scaling_configuration.get('MaxCapacity', 'Not Configured')
-
-        return {
-            'MinCapacity': min_capacity,
-            'MaxCapacity': max_capacity,
-        }
-    except ClientError as e:
-        print(f"Error retrieving Serverless capacity for RDS cluster {db_cluster_identifier}: {e}")
         return None
 
 def main():
@@ -170,14 +171,13 @@ def main():
             'InstanceType', 'LogicalId',
             'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible',
             'SupportEmail', 'SysLevel', 'Application',  # Added columns
-            'MinCapacity', 'MaxCapacity',  # Added Serverless capacity
         ]
 
         cluster_fieldnames = [
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
             'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags',
-            'ServerlessCapacity',  # Added Serverless capacity
+            'ServerlessV2ScalingConfiguration',  # Added Serverless capacity
         ]
 
         with open(instance_filename, 'w', newline='') as instance_csvfile:
