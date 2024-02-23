@@ -136,6 +136,15 @@ def get_db_cluster_info(rds_client, db_cluster_identifier):
         print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
         return None
 
+def get_account_alias(iam_client):
+    try:
+        response = iam_client.list_account_aliases()
+        aliases = response['AccountAliases']
+        return aliases[0] if aliases else 'No Alias'
+    except ClientError as e:
+        print(f"Error retrieving account alias: {e}")
+        return 'No Alias'
+
 def main():
     try:
         regions = ['us-east-1', 'us-east-2', 'us-west-2']  # Hardcoded regions
@@ -151,12 +160,14 @@ def main():
             'InstanceType', 'LogicalId',
             'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible',
             'SupportEmail', 'SysLevel', 'Application',  # Added columns
+            'AccountAlias',  # Added column
         ]
 
         cluster_fieldnames = [
             'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion',
             'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'CharacterSetName', 'DatabaseName',
             'DBClusterMembers', 'VpcSecurityGroups', 'AssociatedRoles', 'DomainMemberships', 'Tags',
+            'AccountAlias',  # Added column
         ]
 
         with open(instance_filename, 'w', newline='') as instance_csvfile:
@@ -169,6 +180,7 @@ def main():
 
                 for region in regions:
                     rds_client = boto3.client('rds', region_name=region)
+                    iam_client = boto3.client('iam', region_name=region)
 
                     response_instances = rds_client.describe_db_instances()
                     instances = response_instances['DBInstances']
@@ -176,15 +188,19 @@ def main():
                     response_clusters = rds_client.describe_db_clusters()
                     clusters = response_clusters['DBClusters']
 
+                    account_alias = get_account_alias(iam_client)
+
                     for instance in instances:
                         insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
                         if insights:
+                            insights['AccountAlias'] = account_alias
                             instance_writer.writerow(insights)
                             print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
 
                     for cluster in clusters:
                         cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
                         if cluster_info:
+                            cluster_info['AccountAlias'] = account_alias
                             cluster_writer.writerow(cluster_info)
                             print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
 
