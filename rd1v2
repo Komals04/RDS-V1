@@ -53,6 +53,11 @@ def get_instance_configuration(rds_client, db_instance):
             **flattened_tags,  # Include flattened tags for instances
         }
 
+        # Fetch MinCapacity from ServerlessV2ScalingConfiguration
+        serverless_v2_scaling_configuration = instance.get('ServerlessV2ScalingConfiguration', {})
+        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
+        instance_configuration['MinCapacity'] = min_capacity
+
         if 'Provisioned IOPS' in instance_configuration['InstanceType']:
             instance_configuration['MaximumCapacity'] = str(instance.get('Iops', 'Not Configured'))
 
@@ -171,6 +176,7 @@ def main():
             'InstanceType', 'LogicalId',
             'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible',
             'SupportEmail', 'SysLevel', 'Application',  # Added columns
+            'MinCapacity',  # Added MinCapacity for Serverless
         ]
 
         cluster_fieldnames = [
