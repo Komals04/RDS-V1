@@ -1,40 +1,278 @@
-# utils.py
 import boto3
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 
-def extract_core_count(processor_features):
-    # ... (unchanged)
+def flatten_tags(tag_list):
+    logical_id_tag = next((tag for tag in tag_list if tag['Key'] == 'aws:cloudformation:logical-id'), None)
+    logical_id = logical_id_tag['Value'] if logical_id_tag else 'Not Configured'
+    return {'LogicalId': logical_id}
 
-def get_instance_configuration(rds_client, db_instance):
-    # ... (unchanged)
+def flatten_nested_attributes(items):
+    return [
+        {f"{k}_{sub_k}": sub_v for sub_k, sub_v in item.items()}
+        for k, v in items[0].items()
+        for item in items
+    ] if items else []
 
-def get_role_information(rds_client, db_instance):
-    # ... (unchanged)
+def get_instance_configuration(rds_client, cloudwatch_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
 
-def get_rds_insights(rds_client, db_instance):
-    # ... (unchanged)
+        # Extracting the specific tag key "aws:cloudformation:logical-id"
+        tags = instance.get('TagList', [])
+        flattened_tags = flatten_tags(tags)
 
-def get_db_cluster_info(rds_client, db_cluster_identifier):
-    # ... (unchanged)
+        # Extracting additional tags 'SupportEmail', 'SysLevel', and 'Application'
+        support_email_tag = next((tag for tag in tags if tag['Key'] == 'SupportEmail'), None)
+        sys_level_tag = next((tag for tag in tags if tag['Key'] == 'SysLevel'), None)
+        application_tag = next((tag for tag in tags if tag['Key'] == 'Application'), None)
 
-def export_to_csv(csvfile, fieldnames, regions):
-    for region in regions:
-        rds_client = boto3.client('rds', region_name=region)
+        support_email = support_email_tag['Value'] if support_email_tag else 'Not Configured'
+        sys_level = sys_level_tag['Value'] if sys_level_tag else 'Not Configured'
+        application = application_tag['Value'] if application_tag else 'Not Configured'
 
-        response_instances = rds_client.describe_db_instances()
-        instances = response_instances['DBInstances']
+        instance_configuration = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'AllocatedStorage': f"{instance['AllocatedStorage']} Gib",
+            'ProvisionedIOPS': f"{instance.get('Iops', 'Not Configured')} IOPS",
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('NetworkType', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+            'InstanceType': instance.get('DBInstanceClass', 'Not Configured'),
+            'PreferredMaintenanceWindow': instance.get('PreferredMaintenanceWindow', 'Not Configured'),
+            'BackupRetentionPeriod': instance.get('BackupRetentionPeriod', 'Not Configured'),
+            'PubliclyAccessible': instance.get('PubliclyAccessible', 'Not Configured'),
+            'SupportEmail': support_email,
+            'SysLevel': sys_level,
+            'Application': application,
+            **flattened_tags,  # Include flattened tags for instances
+        }
 
-        response_clusters = rds_client.describe_db_clusters()
-        clusters = response_clusters['DBClusters']
+        # Collect CloudWatch metrics
+        start_time = datetime.utcnow() - timedelta(days=1)  # Adjust the timeframe as needed
+        end_time = datetime.utcnow()
+        period = 3600  # 1 hour
 
-        for instance in instances:
-            insights = get_rds_insights(rds_client, instance['DBInstanceIdentifier'])
-            if insights:
-                csvfile.writerow(insights)
+        metrics_data = get_rds_metrics_cloudwatch(cloudwatch_client, db_instance, start_time, end_time, period)
+        instance_configuration.update(metrics_data)
 
-        for cluster in clusters:
-            cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'])
-            if cluster_info:
-                csvfile.writerow(cluster_info)
+        return instance_configuration
+    except ClientError as e:
+        print(f"Error retrieving instance configuration for RDS instance {db_instance}: {e}")
+        return None
+
+def get_serverless_capacity(rds_client, db_cluster_identifier):
+    try:
+        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
+        db_cluster = response['DBClusters'][0]
+
+        # Fetch ServerlessV2ScalingConfiguration attributes
+        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
+        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
+        max_capacity = serverless_v2_scaling_configuration.get('MaxCapacity', 'Not Configured')
+
+        return {
+            'MinCapacity': min_capacity,
+            'MaxCapacity': max_capacity,
+        }
+    except ClientError as e:
+        print(f"Error retrieving Serverless capacity for RDS cluster {db_cluster_identifier}: {e}")
+        return None
+
+def get_rds_metrics_cloudwatch(cloudwatch_client, db_instance, start_time, end_time, period):
+    dimensions = [{'Name': 'DBInstanceIdentifier', 'Value': db_instance}]
+    statistics = ['Average']
+
+    # List of metrics to collect
+    metrics = [
+        'DatabaseConnections',
+        'NetworkReceiveThroughput',
+        'NetworkTransmitThroughput',
+        'ReadIOPS',
+        'WriteIOPS',
+        'ReadThroughput',
+        'WriteThroughput'
+    ]
+
+    metrics_data = {}
+
+    for metric in metrics:
+        try:
+            response = cloudwatch_client.get_metric_statistics(
+                Namespace='AWS/RDS',
+                MetricName=metric,
+                Dimensions=dimensions,
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=period,
+                Statistics=statistics
+            )
+
+            if 'Datapoints' in response:
+                data_points = response['Datapoints']
+                if data_points:
+                    # Take the average value over the specified period
+                    average_value = data_points[0]['Average']
+                    metrics_data[metric] = f"{average_value:.2f}"
+                else:
+                    metrics_data[metric] = 'Not Available'
+            else:
+                metrics_data[metric] = 'Not Available'
+        except ClientError as e:
+            print(f"Error retrieving CloudWatch metric {metric} for RDS instance {db_instance}: {e}")
+            metrics_data[metric] = 'Not Available'
+
+    return metrics_data
+
+def get_rds_insights(rds_client, cloudwatch_client, db_instance):
+    try:
+        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance)
+        instance = response['DBInstances'][0]
+
+        global_cluster_identifier = instance.get('GlobalClusterIdentifier', None)
+
+        insights = {
+            'DBIdentifier': instance['DBInstanceIdentifier'],
+            'Status': instance['DBInstanceStatus'],
+            'Engine': instance['Engine'],
+            'Region': rds_client.meta.region_name,
+            'AllocatedStorage': f"{instance['AllocatedStorage']} Gib",
+            'ProvisionedIOPS': f"{instance.get('Iops', 'Not Configured')} IOPS",
+            'StorageType': instance.get('StorageType', 'Not Configured'),
+            'NetworkType': instance.get('NetworkType', 'Not Configured'),
+            'Multi-AZ': instance.get('MultiAZ', 'Not Configured'),
+        }
+
+        instance_configuration = get_instance_configuration(rds_client, cloudwatch_client, db_instance)
+        insights.update(instance_configuration)
+
+        return insights
+    except ClientError as e:
+        print(f"Error retrieving insights for RDS instance {db_instance}: {e}")
+        return None
+
+def get_db_cluster_info(rds_client, db_cluster_identifier, cloudwatch_client):
+    try:
+        response = rds_client.describe_db_clusters(DBClusterIdentifier=db_cluster_identifier)
+        db_cluster = response['DBClusters'][0]
+
+        # Fetch ServerlessV2ScalingConfiguration attributes
+        serverless_v2_scaling_configuration = db_cluster.get('ServerlessV2ScalingConfiguration', {})
+        min_capacity = serverless_v2_scaling_configuration.get('MinCapacity', 'Not Configured')
+
+        cluster_info = {
+            'DBClusterIdentifier': db_cluster['DBClusterIdentifier'],
+            'ClusterStatus': db_cluster['Status'],
+            'ClusterEngine': db_cluster['Engine'],
+            'ClusterRegion': rds_client.meta.region_name,
+            'AccountAlias': 'No Alias',  # Default value if not found
+            'AllocatedStorage': f"{db_cluster.get('AllocatedStorage', 'Not Configured')} Gib",
+            'AvailabilityZones': db_cluster.get('AvailabilityZones', []),
+            'BackupRetentionPeriod': db_cluster.get('BackupRetentionPeriod', 'Not Configured'),
+            'DatabaseName': db_cluster.get('DatabaseName', 'Not Configured'),
+
+            'DBClusterMembers': [
+                {
+                    'DBInstanceIdentifier': member['DBInstanceIdentifier'],
+                    'IsClusterWriter': member.get('IsClusterWriter', 'Not Configured'),
+                } for member in db_cluster.get('DBClusterMembers', [])
+            ],
+
+            'MinCapacity': min_capacity,  # Added MinCapacity for Serverless
+        }
+
+        # Collect CloudWatch metrics
+        start_time = datetime.utcnow() - timedelta(days=1)  # Adjust the timeframe as needed
+        end_time = datetime.utcnow()
+        period = 3600  # 1 hour
+
+        metrics_data = get_rds_metrics_cloudwatch(cloudwatch_client, db_cluster_identifier, start_time, end_time, period)
+        cluster_info.update(metrics_data)
+
+        return cluster_info
+    except ClientError as e:
+        print(f"Error retrieving information for RDS cluster {db_cluster_identifier}: {e}")
+        return None
+
+def get_account_alias(iam_client):
+    try:
+        response = iam_client.list_account_aliases()
+        aliases = response['AccountAliases']
+        return aliases[0] if aliases else 'No Alias'
+    except ClientError as e:
+        print(f"Error retrieving account alias: {e}")
+        return 'No Alias'
+
+def main():
+    try:
+        regions = ['us-east-1', 'us-east-2', 'us-west-2']  # Hardcoded regions
+
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        instance_filename = f'rds_insights_instances_{timestamp}.csv'  # CSV file for RDS instances
+        cluster_filename = f'rds_insights_clusters_{timestamp}.csv'  # CSV file for RDS clusters
+
+        instance_fieldnames = [
+            'DBIdentifier', 'Status', 'Engine', 'Region', 'AllocatedStorage',
+            'SysLevel', 'Application', 'AccountAlias', 'SupportEmail',
+            'ProvisionedIOPS', 'StorageType', 'NetworkType',
+            'Multi-AZ',
+            'InstanceType', 'LogicalId',
+            'PreferredMaintenanceWindow', 'BackupRetentionPeriod', 'PubliclyAccessible',
+            'DatabaseConnections', 'NetworkReceiveThroughput', 'NetworkTransmitThroughput',
+            'ReadIOPS', 'WriteIOPS', 'ReadThroughput', 'WriteThroughput'
+        ]
+
+        cluster_fieldnames = [
+            'DBClusterIdentifier', 'ClusterStatus', 'ClusterEngine', 'ClusterRegion', 'AccountAlias',
+            'AllocatedStorage', 'AvailabilityZones', 'BackupRetentionPeriod', 'DatabaseName',
+            'DBClusterMembers', 'MinCapacity',  # Removed fields
+            'DatabaseConnections', 'NetworkReceiveThroughput', 'NetworkTransmitThroughput',
+            'ReadIOPS', 'WriteIOPS', 'ReadThroughput', 'WriteThroughput'
+        ]
+
+        with open(instance_filename, 'w', newline='') as instance_csvfile:
+            instance_writer = csv.DictWriter(instance_csvfile, fieldnames=instance_fieldnames)
+            instance_writer.writeheader()
+
+            with open(cluster_filename, 'w', newline='') as cluster_csvfile:
+                cluster_writer = csv.DictWriter(cluster_csvfile, fieldnames=cluster_fieldnames)
+                cluster_writer.writeheader()
+
+                for region in regions:
+                    rds_client = boto3.client('rds', region_name=region)
+                    iam_client = boto3.client('iam', region_name=region)
+                    cloudwatch_client = boto3.client('cloudwatch', region_name=region)
+
+                    response_instances = rds_client.describe_db_instances()
+                    instances = response_instances['DBInstances']
+
+                    response_clusters = rds_client.describe_db_clusters()
+                    clusters = response_clusters['DBClusters']
+
+                    account_alias = get_account_alias(iam_client)
+
+                    for instance in instances:
+                        insights = get_rds_insights(rds_client, cloudwatch_client, instance['DBInstanceIdentifier'])
+                        if insights:
+                            insights['AccountAlias'] = account_alias
+                            instance_writer.writerow(insights)
+                            print(f"Exported details for RDS instance: {insights['DBIdentifier']} in region {region}")
+
+                    for cluster in clusters:
+                        cluster_info = get_db_cluster_info(rds_client, cluster['DBClusterIdentifier'], cloudwatch_client)
+                        if cluster_info:
+                            cluster_info['AccountAlias'] = account_alias
+                            cluster_writer.writerow(cluster_info)
+                            print(f"Exported details for RDS cluster: {cluster_info['DBClusterIdentifier']} in region {region}")
+
+                print(f'Completed checking and exporting RDS insights to {instance_filename} and {cluster_filename} for both regions.')
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
