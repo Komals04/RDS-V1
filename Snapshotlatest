@@ -31,6 +31,18 @@ def get_snapshot_insights(rds_client, snapshot):
             'Category': categorize_snapshot(snapshot),
         }
 
+        # Fetch syslevel from tags
+        tags_response = rds_client.list_tags_for_resource(ResourceName=snapshot['DBSnapshotArn'])
+        tags = {tag['Key']: tag['Value'] for tag in tags_response['TagList']}
+        sys_level = tags.get('SysLevel', 'Not Configured')
+        insights['SysLevel'] = sys_level
+
+        # Fetch database storage size
+        db_instance_identifier = snapshot['DBInstanceIdentifier']
+        db_instance_response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance_identifier)
+        db_instance_storage_size = db_instance_response['DBInstances'][0]['AllocatedStorage']
+        insights['DBStorageSize'] = db_instance_storage_size
+
         return insights
     except ClientError as e:
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
@@ -48,10 +60,12 @@ def get_rds_snapshots(rds_client):
             'SnapshotCreateTime',
             'Engine',
             'AllocatedStorage',
+            'DBStorageSize',
             'Status',
             'SnapshotType',
             'StorageType',
             'Category',
+            'SysLevel',
         ]
 
         with open(filename_snapshots, 'w', newline='') as csvfile_snapshots:
