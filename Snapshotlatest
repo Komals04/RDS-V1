@@ -37,23 +37,18 @@ def get_snapshot_insights(rds_client, snapshot):
         sys_level = tags.get('SysLevel', 'Not Configured')
         insights['SysLevel'] = sys_level
 
-        # Fetch database storage size
-        db_instance_identifier = snapshot['DBInstanceIdentifier']
-        db_instance_response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance_identifier)
-        db_instance_storage_size = db_instance_response['DBInstances'][0]['AllocatedStorage']
-        insights['DBStorageSize'] = db_instance_storage_size
-
         return insights
     except ClientError as e:
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
         return None
 
-def get_rds_snapshots(rds_client):
+def get_rds_snapshots(region):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        rds_client = boto3.client('rds', region_name=region)
 
         # Export RDS snapshots
-        filename_snapshots = f'rds_snapshots_{timestamp}.csv'
+        filename_snapshots = f'rds_snapshots_{region}_{timestamp}.csv'
         fieldnames_snapshots = [
             'DBSnapshotIdentifier',
             'DBInstanceIdentifier',
@@ -85,6 +80,12 @@ def get_rds_snapshots(rds_client):
                 for snapshot in all_snapshots:
                     insights = get_snapshot_insights(rds_client, snapshot)
                     if insights:
+                        # Fetch database storage size from RDS instances
+                        db_instance_identifier = snapshot['DBInstanceIdentifier']
+                        db_instance_response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance_identifier)
+                        db_instance_storage_size = db_instance_response['DBInstances'][0]['AllocatedStorage']
+                        insights['DBStorageSize'] = db_instance_storage_size
+
                         writer_snapshots.writerow(insights)
                         print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
 
@@ -98,9 +99,11 @@ def get_rds_snapshots(rds_client):
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # Replace 'your-region' with your actual AWS region
-    region = 'us-east-1'
-    rds_client = boto3.client('rds', region_name=region)
+    # Export RDS Snapshots for us-east-1
+    get_rds_snapshots('us-east-1')
 
-    # Export RDS Snapshots
-    get_rds_snapshots(rds_client)
+    # Export RDS Snapshots for us-east-2
+    get_rds_snapshots('us-east-2')
+
+    # Export RDS Snapshots for us-west-2
+    get_rds_snapshots('us-west-2')
