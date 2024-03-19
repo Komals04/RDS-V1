@@ -1,0 +1,92 @@
+import boto3
+import csv
+from datetime import datetime
+from botocore.exceptions import ClientError
+
+def categorize_snapshot(snapshot):
+    if snapshot['SnapshotType'] == 'manual':
+        return 'Manual'
+    elif snapshot['SnapshotType'] == 'automated':
+        return 'System Generated'
+    elif 'arn:aws:rds:iam::' in snapshot.get('DBSnapshotArn', ''):
+        return 'Shared with me'
+    elif snapshot['DBSnapshotIdentifier'].startswith('rds:'):
+        return 'Backup service'
+    elif snapshot.get('Public', False):
+        return 'Public'
+    else:
+        return 'Uncategorized'
+
+def get_snapshot_insights(rds_client, snapshot):
+    try:
+        insights = {
+            'DBSnapshotIdentifier': snapshot['DBSnapshotIdentifier'],
+            'DBInstanceIdentifier': snapshot['DBInstanceIdentifier'],
+            'SnapshotCreateTime': snapshot['SnapshotCreateTime'],
+            'Engine': snapshot['Engine'],
+            'AllocatedStorage': snapshot['AllocatedStorage'],
+            'Status': snapshot['Status'],
+            'SnapshotType': snapshot['SnapshotType'],
+            'StorageType': snapshot['StorageType'],
+            'Category': categorize_snapshot(snapshot),
+        }
+
+        return insights
+    except ClientError as e:
+        print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
+        return None
+
+def get_rds_snapshots(rds_client):
+    try:
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+        # Export RDS snapshots
+        filename_snapshots = f'rds_snapshots_{timestamp}.csv'
+        fieldnames_snapshots = [
+            'DBSnapshotIdentifier',
+            'DBInstanceIdentifier',
+            'SnapshotCreateTime',
+            'Engine',
+            'AllocatedStorage',
+            'Status',
+            'SnapshotType',
+            'StorageType',
+            'Category',
+        ]
+
+        with open(filename_snapshots, 'w', newline='') as csvfile_snapshots:
+            writer_snapshots = csv.DictWriter(csvfile_snapshots, fieldnames=fieldnames_snapshots)
+            writer_snapshots.writeheader()
+
+            next_token_snapshots = None
+            while True:
+                # Describe RDS snapshots with pagination
+                if next_token_snapshots:
+                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token_snapshots)
+                else:
+                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
+
+                all_snapshots = response_snapshots['DBSnapshots']
+
+                for snapshot in all_snapshots:
+                    insights = get_snapshot_insights(rds_client, snapshot)
+                    if insights:
+                        writer_snapshots.writerow(insights)
+                        print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
+
+                next_token_snapshots = response_snapshots.get('Marker')
+                if not next_token_snapshots:
+                    break
+
+        print(f'Completed checking and exporting RDS snapshots to {filename_snapshots}.')
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    # Replace 'your-region' with your actual AWS region
+    region = 'us-east-1'
+    rds_client = boto3.client('rds', region_name=region)
+
+    # Export RDS Snapshots
+    get_rds_snapshots(rds_client)
