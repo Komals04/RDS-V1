@@ -32,7 +32,7 @@ def get_snapshot_insights(rds_client, snapshot, region):
             'Region': region,
             'DBSnapshotIdentifier': snapshot['DBSnapshotIdentifier'],
             'DBInstanceIdentifier': snapshot['DBInstanceIdentifier'],
-            'SnapshotCreateTime': snapshot['SnapshotCreateTime'],
+            'SnapshotCreateTime': snapshot.get('SnapshotCreateTime', 'Not Available'),  # Handle missing create time
             'Engine': snapshot['Engine'],
             'AllocatedStorage': snapshot['AllocatedStorage'],
             'Status': snapshot['Status'],
@@ -57,12 +57,13 @@ def get_snapshot_insights(rds_client, snapshot, region):
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
         return None
 
-def get_rds_snapshots(regions):
+def get_rds_snapshots():
     try:
+        regions = ['us-east-1', 'us-east-2', 'us-west-2']
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         iam_client = boto3.client('iam')
 
-        # Export RDS snapshots
+        # Export RDS snapshots to a single CSV file
         filename_snapshots = f'rds_snapshots_{timestamp}.csv'
         fieldnames_snapshots = [
             'Region',
@@ -78,21 +79,18 @@ def get_rds_snapshots(regions):
             'SupportEmail',
             'SysLevel',
             'Application',
-            'AccountAlias'
         ]
 
-        with open(filename_snapshots, 'a', newline='') as csvfile_snapshots:
+        with open(filename_snapshots, 'w', newline='') as csvfile_snapshots:
             writer_snapshots = csv.DictWriter(csvfile_snapshots, fieldnames=fieldnames_snapshots)
-            # Write header only if file is empty
-            if csvfile_snapshots.tell() == 0:
-                writer_snapshots.writeheader()
+            writer_snapshots.writeheader()
 
             for region in regions:
                 rds_client = boto3.client('rds', region_name=region)
-                next_token_snapshots = None
+                account_alias = get_account_alias(iam_client)
 
+                next_token_snapshots = None
                 while True:
-                    # Describe RDS snapshots with pagination
                     if next_token_snapshots:
                         response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token_snapshots)
                     else:
@@ -103,22 +101,16 @@ def get_rds_snapshots(regions):
                     for snapshot in all_snapshots:
                         insights = get_snapshot_insights(rds_client, snapshot, region)
                         if insights:
-                            insights['AccountAlias'] = get_account_alias(iam_client)
                             writer_snapshots.writerow(insights)
-                            print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
 
                     next_token_snapshots = response_snapshots.get('Marker')
                     if not next_token_snapshots:
                         break
 
-        print(f'Completed checking and exporting RDS snapshots.')
+        print(f'Completed checking and exporting RDS snapshots to {filename_snapshots}. Account Alias: {account_alias}')
 
     except Exception as e:
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # Replace 'your-regions' with your desired AWS regions
-    regions = ['us-east-1', 'us-east-2', 'us-west-2']
-
-    # Export RDS Snapshots for each region
-    get_rds_snapshots(regions)
+    get_rds_snapshots()
