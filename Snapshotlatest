@@ -17,6 +17,15 @@ def categorize_snapshot(snapshot):
     else:
         return 'Uncategorized'
 
+def get_account_alias(sts_client):
+    try:
+        response = sts_client.get_caller_identity()
+        account_alias = sts_client.list_account_aliases()['AccountAliases'][0]
+        return account_alias
+    except ClientError as e:
+        print(f"Error retrieving account alias: {e}")
+        return 'Not Available'
+
 def get_snapshot_insights(rds_client, snapshot):
     try:
         insights = {
@@ -31,36 +40,42 @@ def get_snapshot_insights(rds_client, snapshot):
             'Category': categorize_snapshot(snapshot),
         }
 
-        # Fetch syslevel from tags
+        # Fetch additional fields from tags
         tags_response = rds_client.list_tags_for_resource(ResourceName=snapshot['DBSnapshotArn'])
         tags = {tag['Key']: tag['Value'] for tag in tags_response['TagList']}
+        support_email = tags.get('SupportEmail', 'Not Configured')
         sys_level = tags.get('SysLevel', 'Not Configured')
+        application = tags.get('Application', 'Not Configured')
+
+        insights['SupportEmail'] = support_email
         insights['SysLevel'] = sys_level
+        insights['Application'] = application
 
         return insights
     except ClientError as e:
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
         return None
 
-def get_rds_snapshots(region):
+def get_rds_snapshots(rds_client, sts_client):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        rds_client = boto3.client('rds', region_name=region)
 
         # Export RDS snapshots
-        filename_snapshots = f'rds_snapshots_{region}_{timestamp}.csv'
+        filename_snapshots = f'rds_snapshots_{timestamp}.csv'
         fieldnames_snapshots = [
             'DBSnapshotIdentifier',
             'DBInstanceIdentifier',
             'SnapshotCreateTime',
             'Engine',
             'AllocatedStorage',
-            'DBStorageSize',
             'Status',
             'SnapshotType',
             'StorageType',
             'Category',
+            'SupportEmail',
             'SysLevel',
+            'Application',
+            'AccountAlias'
         ]
 
         with open(filename_snapshots, 'w', newline='') as csvfile_snapshots:
@@ -80,16 +95,7 @@ def get_rds_snapshots(region):
                 for snapshot in all_snapshots:
                     insights = get_snapshot_insights(rds_client, snapshot)
                     if insights:
-                        # Fetch database storage size from RDS instances
-                        db_instance_identifier = snapshot['DBInstanceIdentifier']
-                        try:
-                            db_instance_response = rds_client.describe_db_instances(DBInstanceIdentifier=db_instance_identifier)
-                            db_instance_storage_size = db_instance_response['DBInstances'][0]['AllocatedStorage']
-                            insights['DBStorageSize'] = db_instance_storage_size
-                        except ClientError as e:
-                            print(f"Skipping snapshot {snapshot['DBSnapshotIdentifier']} - {e}")
-                            continue
-
+                        insights['AccountAlias'] = get_account_alias(sts_client)
                         writer_snapshots.writerow(insights)
                         print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
 
@@ -103,11 +109,10 @@ def get_rds_snapshots(region):
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # Export RDS Snapshots for us-east-1
-    get_rds_snapshots('us-east-1')
+    # Replace 'your-region' with your actual AWS region
+    region = ['us-east-1', 'us-east-2', 'us-west-2']
+    rds_client = boto3.client('rds', region_name=region)
+    sts_client = boto3.client('sts')
 
-    # Export RDS Snapshots for us-east-2
-    get_rds_snapshots('us-east-2')
-
-    # Export RDS Snapshots for us-west-2
-    get_rds_snapshots('us-west-2')
+    # Export RDS Snapshots and Cluster Snapshots
+    get_rds_snapshots(rds_client, sts_client)
