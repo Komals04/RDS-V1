@@ -26,9 +26,10 @@ def get_account_alias(iam_client):
         print(f"Error retrieving account alias: {e}")
         return 'No Alias'
 
-def get_snapshot_insights(rds_client, snapshot):
+def get_snapshot_insights(rds_client, snapshot, region):
     try:
         insights = {
+            'Region': region,
             'DBSnapshotIdentifier': snapshot['DBSnapshotIdentifier'],
             'DBInstanceIdentifier': snapshot['DBInstanceIdentifier'],
             'SnapshotCreateTime': snapshot['SnapshotCreateTime'],
@@ -56,10 +57,10 @@ def get_snapshot_insights(rds_client, snapshot):
         print(f"Error retrieving insights for RDS snapshot {snapshot['DBSnapshotIdentifier']}: {e}")
         return None
 
-def get_rds_snapshots(region, sts_client, iam_client):
+def get_rds_snapshots(regions):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        rds_client = boto3.client('rds', region_name=region)
+        iam_client = boto3.client('iam')
 
         # Export RDS snapshots
         filename_snapshots = f'rds_snapshots_{timestamp}.csv'
@@ -86,29 +87,31 @@ def get_rds_snapshots(region, sts_client, iam_client):
             if csvfile_snapshots.tell() == 0:
                 writer_snapshots.writeheader()
 
-            next_token_snapshots = None
-            while True:
-                # Describe RDS snapshots with pagination
-                if next_token_snapshots:
-                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token_snapshots)
-                else:
-                    response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
+            for region in regions:
+                rds_client = boto3.client('rds', region_name=region)
+                next_token_snapshots = None
 
-                all_snapshots = response_snapshots['DBSnapshots']
+                while True:
+                    # Describe RDS snapshots with pagination
+                    if next_token_snapshots:
+                        response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100, Marker=next_token_snapshots)
+                    else:
+                        response_snapshots = rds_client.describe_db_snapshots(MaxRecords=100)
 
-                for snapshot in all_snapshots:
-                    insights = get_snapshot_insights(rds_client, snapshot)
-                    if insights:
-                        insights['AccountAlias'] = get_account_alias(iam_client)
-                        insights['Region'] = region
-                        writer_snapshots.writerow(insights)
-                        print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
+                    all_snapshots = response_snapshots['DBSnapshots']
 
-                next_token_snapshots = response_snapshots.get('Marker')
-                if not next_token_snapshots:
-                    break
+                    for snapshot in all_snapshots:
+                        insights = get_snapshot_insights(rds_client, snapshot, region)
+                        if insights:
+                            insights['AccountAlias'] = get_account_alias(iam_client)
+                            writer_snapshots.writerow(insights)
+                            print(f"Exported details for RDS snapshot: {insights['DBSnapshotIdentifier']}")
 
-        print(f'Completed checking and exporting RDS snapshots for {region}.')
+                    next_token_snapshots = response_snapshots.get('Marker')
+                    if not next_token_snapshots:
+                        break
+
+        print(f'Completed checking and exporting RDS snapshots.')
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -116,9 +119,6 @@ def get_rds_snapshots(region, sts_client, iam_client):
 if __name__ == "__main__":
     # Replace 'your-regions' with your desired AWS regions
     regions = ['us-east-1', 'us-east-2', 'us-west-2']
-    sts_client = boto3.client('sts')
-    iam_client = boto3.client('iam')
 
-    for region in regions:
-        # Export RDS Snapshots for each region
-        get_rds_snapshots(region, sts_client, iam_client)
+    # Export RDS Snapshots for each region
+    get_rds_snapshots(regions)
